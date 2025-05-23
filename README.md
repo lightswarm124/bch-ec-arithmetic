@@ -92,7 +92,7 @@ These operations must be implemented identically across all consensus-enforcing 
 
 Native EC arithmetic is computationally expensive. To prevent DoS:
 
-* Each call to `OP_ECADD` or `OP_ECMUL` will carry a high operation cost (proposed: 20,000 and 100,000 respectively).
+* Each call to `OP_ECADD` or `OP_ECMUL` will carry a high operation cost.
 * Cumulative cost will be tracked using the existing Operation Cost Limit from the [VM Limits CHIP](https://github.com/bitjson/bch-vm-limits).
 
 ### Precedent
@@ -131,10 +131,7 @@ Result:
 
 ## Deployment
 
-Target upgrade: May 2027
-
-* Chipnet activation MTP: TBD (\~Nov 2026)
-* Mainnet activation MTP: TBD (\~May 2027)
+TODO
 
 ## Future Work
 

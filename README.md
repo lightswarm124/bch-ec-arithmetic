@@ -1,155 +1,275 @@
 # CHIP-2025-05: Native Elliptic Curve Arithmetic Operations
 
 ```
-    Title: Native Elliptic Curve Arithmetic Operations
-    Type: Standards
-    Layer: Consensus
-    Maintainer: TBD
-    Status: Draft
-    Initial Publication Date: 2025-05-23
-    Latest Revision Date: 2025-05-23
-    Version: 0.1.0
+Title: Native Elliptic Curve Arithmetic Operations
+Type: Standards
+Layer: Consensus
+Maintainer: TBD
+Status: Draft
+Initial Publication Date: 2025-05-23
+Latest Revision Date: 2026-06-23
+Version: 0.2.0
 ```
 
-## Summary
+## Abstract
 
-This CHIP proposes two new Bitcoin Cash VM opcodes:
+This CHIP defines two consensus opcodes for native secp256k1 affine elliptic-curve arithmetic:
 
-* `OP_ECADD`: Perform an elliptic curve point addition
-* `OP_ECMUL`: Perform an elliptic curve scalar multiplication
+- `OP_ECADD`
+- `OP_ECMUL`
 
-These operations are defined over the secp256k1 elliptic curve and mirror the underlying cryptographic operations used in Bitcoin’s signature scheme.
+The purpose of these opcodes is to provide the elliptic-curve arithmetic needed to unlock practical verifier workloads such as Bulletproofs, ZK verifiers, confidential transactions, and related developer-defined protocols, while keeping the scope small enough to specify, implement, benchmark, and audit.
 
 ## Motivation
 
-Currently, Bitcoin Cash smart contracts do not support native elliptic curve arithmetic, limiting advanced cryptographic applications like:
+The thread converged on a practical need, not just a general desire for more math:
 
-* Zero-knowledge proof verification (e.g., Bulletproofs, Halo)
-* Threshold signatures and MuSig-style key aggregation
-* Verifiable delay functions (VDFs)
-* Identity-based encryption
+- confidential-amount systems need point addition for balance checks
+- proof systems need scalar multiplication and multi-scalar routines for verifier logic
+- covenant, multisig, and custom cryptographic protocols benefit from native curve operations
+- emulation in script is possible but far too expensive for real-world use
 
-Instead, these must be emulated inefficiently using hash-based constructions or precomputed lookup tables. This significantly increases contract bytecode length, execution cost, and verification time. Native opcodes reduce complexity and bring BCH contract capabilities on par with or beyond those of other programmable blockchains.
+The discussion also made two requirements clear:
 
-## Technical Specification
+- the CHIP needs a real, concrete verifier use case, not just toy examples
+- the initial spec should stay focused instead of expanding into a large math package
+
+## Scope
+
+### In scope
+
+- affine point addition on secp256k1
+- affine scalar multiplication on secp256k1
+- deterministic failure on invalid inputs
+- fixed-width 32-byte big-endian encodings
+
+### Out of scope
+
+The following are intentionally not included in this CHIP:
+
+- modular inversion
+- point negation
+- point doubling as a separate opcode
+- point decompression
+- multi-scalar multiplication
+- pairings
+- generic curve selection
+
+These can be proposed later if there is a separate use case and implementation budget.
+
+## Definitions
+
+The curve is secp256k1 over the field `F_p` where:
+
+- `p = 2^256 - 2^32 - 977`
+- `n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141`
+- `G` is the standard secp256k1 generator
+
+A point is represented in affine coordinates as `(x, y)` using 32-byte big-endian integers.
+
+### Canonical encoding
+
+All field elements and scalars MUST be encoded as exactly 32 bytes.
+
+- Field elements MUST satisfy `0 <= value < p`
+- Scalars MUST satisfy `1 <= value < n`
+
+There is no compressed-point representation in this CHIP.
+
+### Stack notation
+
+Stack items are listed top-to-bottom.
+
+If an opcode pops `A`, then `B`, `A` is the topmost item.
+
+## Opcode Semantics
 
 ### `OP_ECADD`
 
-**Codepoint**: TBD (proposed: `0xe0`)
+#### Inputs
 
-**Stack inputs**:
+Top-to-bottom stack inputs:
 
-* `[pointB_y]` (bytes, 32 bytes)
-* `[pointB_x]` (bytes, 32 bytes)
-* `[pointA_y]` (bytes, 32 bytes)
-* `[pointA_x]` (bytes, 32 bytes)
+- `pointB_y`
+- `pointB_x`
+- `pointA_y`
+- `pointA_x`
 
-**Stack output**:
+#### Behavior
 
-* `[result_y]` (bytes, 32 bytes)
-* `[result_x]` (bytes, 32 bytes)
+1. Parse all four inputs as canonical 32-byte big-endian field elements.
+2. Fail if any input is not canonical or is greater than or equal to `p`.
+3. Interpret the inputs as affine secp256k1 points `A = (pointA_x, pointA_y)` and `B = (pointB_x, pointB_y)`.
+4. Fail if either point is not on the secp256k1 curve.
+5. Compute `R = A + B` in the secp256k1 group.
+6. Fail if `R` is the point at infinity.
+7. Push the result coordinates back onto the stack.
 
-**Semantics**:
+#### Outputs
 
-* Validates that `pointA` and `pointB` are on the secp256k1 curve.
-* Computes `result = pointA + pointB` using elliptic curve addition.
-* Pushes the `x` and `y` coordinates of the resulting point onto the stack.
-* If either input is not a valid curve point, the operation fails.
+Top-to-bottom stack outputs:
+
+- `result_y`
+- `result_x`
 
 ### `OP_ECMUL`
 
-**Codepoint**: TBD (proposed: `0xe1`)
+#### Inputs
 
-**Stack inputs**:
+Top-to-bottom stack inputs:
 
-* `[scalar]` (bytes, 32 bytes)
-* `[point_y]` (bytes, 32 bytes)
-* `[point_x]` (bytes, 32 bytes)
+- `scalar`
+- `point_y`
+- `point_x`
 
-**Stack output**:
+#### Behavior
 
-* `[result_y]` (bytes, 32 bytes)
-* `[result_x]` (bytes, 32 bytes)
+1. Parse `scalar` as a canonical 32-byte big-endian integer.
+2. Fail if `scalar` is not canonical or is not in the range `1 <= scalar < n`.
+3. Parse `point_x` and `point_y` as canonical 32-byte big-endian field elements.
+4. Fail if the point is not on the secp256k1 curve.
+5. Compute `R = scalar * point`.
+6. Fail if `R` is the point at infinity.
+7. Push the result coordinates back onto the stack.
 
-**Semantics**:
+#### Outputs
 
-* Validates that `point` is on the secp256k1 curve.
-* Computes `result = scalar * point` using elliptic curve scalar multiplication.
-* Pushes the `x` and `y` coordinates of the resulting point.
-* If the scalar is zero or the input point is not valid, fails.
+Top-to-bottom stack outputs:
+
+- `result_y`
+- `result_x`
+
+## Consensus Rules
+
+The following are consensus-critical:
+
+- All implementations MUST use the same curve parameters and canonical encodings.
+- Any invalid input MUST fail the opcode atomically.
+- A failure MUST leave no partial outputs on the stack.
+- The output of each opcode MUST be deterministic for the same input bytes.
+- Points at infinity are not representable as successful results in this CHIP.
+
+Implementations MAY use projective or Jacobian coordinates internally, but the consensus result MUST match the affine semantics above.
+
+## Resource Accounting
+
+Native EC arithmetic is expensive enough that it MUST be explicitly metered.
+
+- `OP_ECADD` MUST charge a fixed consensus operation cost.
+- `OP_ECMUL` MUST charge a fixed consensus operation cost.
+- Both costs MUST be enforced by the VM op-cost limit.
+- The exact cost constants SHOULD be benchmarked against a reference implementation before activation.
+- `OP_ECMUL` MUST cost at least as much as `OP_ECADD`.
+
+If the chosen op-cost budget cannot support these operations safely, the CHIP should not activate.
 
 ## Security Considerations
 
-### Consensus Stability
+### DoS resistance
 
-These operations must be implemented identically across all consensus-enforcing nodes. Care must be taken to use constant-time implementations to prevent side-channel attacks. Additionally:
+The opcodes must be bounded by the VM cost meter so they cannot be used to create unbounded work.
 
-* Inputs must be strictly validated to lie on the secp256k1 curve.
-* Points at infinity must be handled deterministically (e.g., operation fails).
-* Inputs must be of fixed size (32 bytes each), or the transaction is invalid.
+### Input validation
 
-### Denial-of-Service (DoS) Prevention
+Consensus must reject:
 
-Native EC arithmetic is computationally expensive. To prevent DoS:
+- malformed 32-byte encodings
+- field elements outside the secp256k1 field
+- scalars outside the secp256k1 scalar range
+- points not on the curve
+- operations that would produce the point at infinity
 
-* Each call to `OP_ECADD` or `OP_ECMUL` will carry a high operation cost.
-* Cumulative cost will be tracked using the existing Operation Cost Limit from the [VM Limits CHIP](https://github.com/bitjson/bch-vm-limits).
+### Implementation safety
 
-### Precedent
+Reference code SHOULD use constant-time routines where practical.
 
-Many chains such as Ethereum (via precompiles), Zcash, and Starknet support native elliptic curve operations. However, BCH's model allows deterministic, stateless validation — these operations fit well with that design when bounded by operation cost.
+That is an implementation requirement, not a consensus requirement, but it matters because these operations are cryptographic primitives and will likely be used in sensitive verifier logic.
 
-## Implementation Notes
+### Scope control
 
-* Leverage existing open-source libraries (e.g., libsecp256k1) in C++ implementations.
-* Validate against test vectors defined below.
-* Enforce minimal encoding of inputs as 32-byte big-endian integers.
+The thread made clear that scope creep is a real risk. Keeping the first CHIP to `ECADD` and `ECMUL` avoids mixing the base primitive with more specialized operations that deserve separate analysis.
+
+## Reference Use Cases
+
+The thread identified the first concrete use cases that justify the CHIP:
+
+- confidential-amount balance checks using Pedersen commitments
+- Bulletproof-style range proof verification
+- MuSig-style aggregation and related threshold signing workflows
+- future SNARK/STARK verifier components
+
+At least one end-to-end verifier script SHOULD accompany the final CHIP submission so the network can evaluate a real use case, not just a toy example.
 
 ## Test Vectors
 
-```text
-// Scalar multiplication
-Input:
-  scalar = 0x02
-  point = G (secp256k1 generator point)
-Output:
-  result = 2G (verify against known coordinates)
+The implementation test suite SHOULD include:
 
-// Point addition
-Input:
-  pointA = G
-  pointB = 2G
-Output:
-  result = 3G (verify against known coordinates)
+- `scalar = 2`, `point = G`, expect `2G`
+- `pointA = G`, `pointB = 2G`, expect `3G`
+- invalid point `(0x01, 0x01)`, expect failure
+- `scalar = 0`, expect failure
+- `scalar = n`, expect failure
+- `pointA = G`, `pointB = -G`, expect failure because the result is infinity
 
-// Invalid point
-Input:
-  point = (0x01, 0x01) // Not on curve
-Result:
-  VM Error
-```
+Test vectors SHOULD be checked against a known-good secp256k1 implementation such as libsecp256k1.
 
 ## Deployment
 
-TODO
+Deployment details remain TODO.
+
+The open items that should be resolved before activation are:
+
+- final opcode numbering or opcode-family encoding
+- exact op-cost constants
+- reference implementation benchmark results
+- a real verifier or covenant demonstrating practical utility
+
+### Current BCHN Opcode Window
+
+BCHN already defines the `0xbd`-`0xbf` window, but this proposal leaves those bytes untouched for other future work. For the EC proposal itself, the cleanest contiguous reserve block starts at `0xd6` and runs through `0xfe`:
+
+- `0xd6`-`0xee`
+- `0xf0`-`0xfe`
+
+`0xef` is not a normal candidate because BCHN uses it as `SPECIAL_TOKEN_PREFIX`, and `0xff` is `INVALIDOPCODE`. That means `0xd6`-`0xfe` is the largest practical reserve region available for future EC or post-quantum families, even though `0xef` itself must remain excluded.
+
+### Opcode Family Proposal
+
+One forum proposal suggests reserving a single opcode prefix for EC arithmetic, with the selector carried as script data rather than as a multi-byte opcode. BCHN's current opcode map already uses `0xbc` for `OP_REVERSEBYTES`, so `0xbc` is not available for this purpose. For this proposal, the first EC bytes should start at `0xd6` so that `0xbd`-`0xbf` remain available for unrelated future proposals:
+
+- `0xd6` = `OP_ECADD`
+- `0xd7` = `OP_ECMUL`
+- `0xd8` = possible reserved follow-on slot or EC-family prefix
+- `0xd9`-`0xde` = possible follow-on EC bytes
+- `0xdf`-`0xee` = additional reserve space
+- `0xf0`-`0xfe` = additional reserve space
+
+The benefit is opcode-surface conservation: future EC primitives can be added without burning a new top-level opcode every time. The tradeoff is that a family design would need a concrete selector encoding and dispatch rule, because the opcode bytes themselves are still only one byte wide. This is the only realistic way to make room for future curve families, including any later post-quantum replacement for secp256k1, while keeping the reserve block as contiguous as BCHN allows.
+
+These reserved bytes matter because the loop and function opcodes can make an emulation readable, but they do not change the arithmetic cost class. In practice, `OP_DEFINE`/`OP_INVOKE` and `OP_BEGIN`/`OP_UNTIL` only restructure the work that `ECADD`, `ECMUL`, and the addendum opcodes would otherwise remove.
 
 ## Future Work
 
-This CHIP enables more advanced constructions:
+These opcodes are being explored as potential additions to this CHIP:
 
-* Ring signatures
-* Bulletproofs / Halo / PLONK ZKPs
-* MuSig-style contract aggregation
-* General SNARK/STARK verification
+- `OP_MODINV`
+- `OP_ECMULTGEN`
+- `OP_ECMULTMULTI`
+- pairing-based verification
 
-It also enables BCH-native zero-knowledge systems and privacy protocols without emulating arithmetic through hashes.
+This is actively being discussed in [Bitcoin Cash Research thread](https://bitcoincashresearch.org/t/chip-2025-05-native-elliptic-curve-arithmetic-operations/1570/14)
+
+## Technical Addendum
+
+See [TECHNICAL_ADDENDUM.md](./TECHNICAL_ADDENDUM.md) for candidate follow-on opcodes, their intended use cases, and a detailed sketch of how each one would be specified.
 
 ## References
 
-* [secp256k1](https://en.bitcoin.it/wiki/Secp256k1)
-* [CHIP-2021-05 VM Limits](https://github.com/bitjson/bch-vm-limits)
-* [Ethereum Yellow Paper: Precompiled Contracts](https://ethereum.github.io/yellowpaper/paper.pdf)
-* [Zcash: Sapling Protocol Specification](https://zips.z.cash/protocol/protocol.pdf)
+- [secp256k1](https://en.bitcoin.it/wiki/Secp256k1)
+- [Bitcoin Cash Research thread](https://bitcoincashresearch.org/t/chip-2025-05-native-elliptic-curve-arithmetic-operations/1570)
+- [CHIP-2021-05 VM Limits](https://github.com/bitjson/bch-vm-limits)
+- [Bitcoin Wiki: ECDSA](https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm)
+- [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
 
 ## Copyright
 

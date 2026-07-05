@@ -4,7 +4,7 @@
 Title: Native Elliptic Curve Arithmetic Operations
 Type: Standards
 Layer: Consensus
-Maintainer: lightswarm
+Maintainer: Jerry Qian (lightswarm)
 Status: Draft
 Initial Publication Date: 2025-05-23
 Latest Revision Date: 2026-07-05

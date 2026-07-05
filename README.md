@@ -7,7 +7,7 @@ Layer: Consensus
 Maintainer: lightswarm
 Status: Draft
 Initial Publication Date: 2025-05-23
-Latest Revision Date: 2026-06-23
+Latest Revision Date: 2026-07-05
 Version: 0.2.0
 ```
 
@@ -56,6 +56,13 @@ The following are intentionally not included in this CHIP:
 - generic curve selection
 
 These can be proposed later if there is a separate use case and implementation budget.
+
+## Review Assets
+
+- [Logical fixtures](./fixtures/README.md) cover canonical operand semantics for the core CHIP and follow-on candidates.
+- [VM fixtures](./fixtures/vm/README.md) cover bytecode-level consensus behavior for `OP_ECADD` and `OP_ECMUL`.
+- [Technical addendum](./TECHNICAL_ADDENDUM.md) sketches candidate follow-on opcodes and remaining design questions.
+- [package.json](./package.json) and the lockfile make `npm install` and `npm run validate` fully turnkey.
 
 ## Definitions
 
@@ -210,6 +217,12 @@ The implementation test suite SHOULD include:
 - `scalar = 0`, expect failure
 - `scalar = n`, expect failure
 - `pointA = G`, `pointB = -G`, expect failure because the result is infinity
+
+See [fixtures/README.md](./fixtures/README.md) for machine-readable fixture sets covering the core CHIP and the addendum opcodes.
+
+Those fixtures intentionally include boundary-value and failure cases for canonical encoding, invalid points, infinity, and multi-scalar count mismatches so implementers can exercise the consensus failure paths, not just the happy path.
+
+See [fixtures/vm/README.md](./fixtures/vm/README.md) for raw-bytecode execution fixtures that cover stack underflow, malformed pushes, and atomic failure behavior in the BCH VM.
 
 Test vectors SHOULD be checked against a known-good secp256k1 implementation such as libsecp256k1.
 

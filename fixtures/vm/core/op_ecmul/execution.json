@@ -1,0 +1,117 @@
+{
+  "schema": "ecmath.vm-fixtures/v1",
+  "curve": "secp256k1",
+  "opcode": "OP_ECMUL",
+  "status": "core",
+  "source": "README.md",
+  "cases": [
+    {
+      "id": "VM-ECMUL-01",
+      "description": "2 * G succeeds and preserves junk below the operands",
+      "unlockingBytecode": "04deadbeef2079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179820483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8200000000000000000000000000000000000000000000000000000000000000002",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": true,
+        "stack": [
+          "1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a",
+          "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+          "deadbeef"
+        ]
+      }
+    },
+    {
+      "id": "VM-ECMUL-02",
+      "description": "empty stack must fail before execution begins",
+      "unlockingBytecode": "",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": false,
+        "error": "Tried to read from an empty stack.",
+        "stack": []
+      }
+    },
+    {
+      "id": "VM-ECMUL-03",
+      "description": "non-minimal push of a 32-byte scalar must fail in unlocking bytecode",
+      "unlockingBytecode": "4c200000000000000000000000000000000000000000000000000000000000000001",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": false,
+        "error": "Push operations must use the smallest possible encoding.",
+        "stack": []
+      }
+    },
+    {
+      "id": "VM-ECMUL-04",
+      "description": "a 31-byte scalar must fail length validation",
+      "unlockingBytecode": "2079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179820483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b81f00000000000000000000000000000000000000000000000000000000000000",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": false,
+        "error": "scalar must be a 32-byte stack item",
+        "stack": [
+          "00000000000000000000000000000000000000000000000000000000000000",
+          "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+          "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        ]
+      }
+    },
+    {
+      "id": "VM-ECMUL-05",
+      "description": "scalar 0 must fail range validation",
+      "unlockingBytecode": "2079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179820483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8200000000000000000000000000000000000000000000000000000000000000000",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": false,
+        "error": "scalar out of range",
+        "stack": [
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+          "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        ]
+      }
+    },
+    {
+      "id": "VM-ECMUL-06",
+      "description": "invalid point (1, 1) must fail curve validation",
+      "unlockingBytecode": "200000000000000000000000000000000000000000000000000000000000000001200000000000000000000000000000000000000000000000000000000000000001200000000000000000000000000000000000000000000000000000000000000001",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": false,
+        "error": "point not on curve",
+        "stack": [
+          "0000000000000000000000000000000000000000000000000000000000000001",
+          "0000000000000000000000000000000000000000000000000000000000000001",
+          "0000000000000000000000000000000000000000000000000000000000000001"
+        ]
+      }
+    },
+    {
+      "id": "VM-ECMUL-07",
+      "description": "scalar pushed with OP_1 must fail exact-length validation while preserving the existing stack",
+      "unlockingBytecode": "04deadbeef2079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179820483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b851",
+      "lockingBytecode": "d7",
+      "expect": {
+        "success": false,
+        "error": "scalar must be a 32-byte stack item",
+        "stack": [
+          "01",
+          "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+          "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+          "deadbeef"
+        ]
+      }
+    },
+    {
+      "id": "VM-ECMUL-08",
+      "description": "truncated locking bytecode must fail after unlocking evaluation",
+      "unlockingBytecode": "04deadbeef2079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179820483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8200000000000000000000000000000000000000000000000000000000000000002",
+      "lockingBytecode": "4c20deadbeef",
+      "expect": {
+        "success": false,
+        "error": "The provided locking bytecode is malformed.",
+        "stack": []
+      }
+    }
+  ]
+}

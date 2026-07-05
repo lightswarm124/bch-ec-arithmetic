@@ -1,0 +1,14 @@
+{
+  "name": "ecmath",
+  "private": true,
+  "version": "0.0.0",
+  "description": "CHIP review fixtures and validators for native elliptic curve arithmetic operations",
+  "scripts": {
+    "validate:fixtures": "node scripts/validate-fixtures.js",
+    "validate:vm-fixtures": "node scripts/validate-vm-fixtures.js",
+    "validate": "npm run validate:fixtures && npm run validate:vm-fixtures"
+  },
+  "devDependencies": {
+    "@bitauth/libauth": "^3.0.0"
+  }
+}

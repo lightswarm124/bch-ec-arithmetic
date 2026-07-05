@@ -1,0 +1,273 @@
+{
+  "schema": "ecmath.spec-fixtures/v1",
+  "curve": "secp256k1",
+  "opcode": "OP_ECMUL",
+  "status": "core",
+  "source": "README.md",
+  "cases": [
+    {
+      "id": "ECMUL-01",
+      "description": "1 * G = G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+          "result_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-02",
+      "description": "2 * G = 2G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000002",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a",
+          "result_x": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-03",
+      "description": "3 * G = 3G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000003",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "388f7b0f632de8140fe337e62a37f3566500a99934c2231b6cb9fd7584b8e672",
+          "result_x": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-04",
+      "description": "3 * (2G) = 6G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000003",
+        "point_y": "1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a",
+        "point_x": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "ae12777aacfbb620f3be96017f45c560de80f0f6518fe4a03c870c36b075f297",
+          "result_x": "fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-05",
+      "description": "5 * G = 5G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000005",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "d8ac222636e5e3d6d4dba9dda6c9c426f788271bab0d6840dca87d3aa6ac62d6",
+          "result_x": "2f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-06",
+      "description": "7 * G = 7G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000007",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "6aebca40ba255960a3178d6d861a54dba813d0b813fde7b5a5082628087264da",
+          "result_x": "5cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-07",
+      "description": "9 * G = 9G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000009",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "cc338921b0a7d9fd64380971763b61e9add888a4375f8e0f05cc262ac64f9c37",
+          "result_x": "acd484e2f0c7f65309ad178a9f559abde09796974c57e714c35f110dfc27ccbe"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-08",
+      "description": "20 * G = 20G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000014",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "12ba26dcb10ec1625da61fa10a844c676162948271d96967450288ee9233dc3a",
+          "result_x": "4ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-09",
+      "description": "(n - 1) * G = -G",
+      "input": {
+        "scalar": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "b7c52588d95c3b9aa25b0403f1eef75702e84bb7597aabe663b82f6f04ef2777",
+          "result_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-10",
+      "description": "2 * (-G) = -2G",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000002",
+        "point_y": "b7c52588d95c3b9aa25b0403f1eef75702e84bb7597aabe663b82f6f04ef2777",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "result_y": "e51e970159c23cc65c3a7be6b99315110809cd9acd992f1edc9bce55af301705",
+          "result_x": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      }
+    },
+    {
+      "id": "ECMUL-11",
+      "description": "scalar 0 must fail",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000000",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": false,
+        "error": "scalar out of range"
+      }
+    },
+    {
+      "id": "ECMUL-12",
+      "description": "scalar n must fail",
+      "input": {
+        "scalar": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": false,
+        "error": "scalar out of range"
+      }
+    },
+    {
+      "id": "ECMUL-13",
+      "description": "invalid point (1, 1) must fail curve validation",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_y": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_x": "0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "expect": {
+        "success": false,
+        "error": "point not on curve"
+      }
+    },
+    {
+      "id": "ECMUL-14",
+      "description": "point (0, 0) must fail curve validation",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_y": "0000000000000000000000000000000000000000000000000000000000000000",
+        "point_x": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": {
+        "success": false,
+        "error": "point not on curve"
+      }
+    },
+    {
+      "id": "ECMUL-15",
+      "description": "field element equal to p must fail canonical parsing",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+      },
+      "expect": {
+        "success": false,
+        "error": "field element >= p"
+      }
+    },
+    {
+      "id": "ECMUL-16",
+      "description": "scalar n + 1 must fail range validation",
+      "input": {
+        "scalar": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364142",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": false,
+        "error": "scalar out of range"
+      }
+    },
+    {
+      "id": "ECMUL-17",
+      "description": "field element p + 1 in point_x must fail canonical parsing",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_y": "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        "point_x": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc30"
+      },
+      "expect": {
+        "success": false,
+        "error": "field element >= p"
+      }
+    },
+    {
+      "id": "ECMUL-18",
+      "description": "field element p + 1 in point_y must fail canonical parsing",
+      "input": {
+        "scalar": "0000000000000000000000000000000000000000000000000000000000000001",
+        "point_y": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc30",
+        "point_x": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "expect": {
+        "success": false,
+        "error": "field element >= p"
+      }
+    }
+  ]
+}

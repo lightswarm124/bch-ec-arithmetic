@@ -1,0 +1,94 @@
+{
+  "schema": "ecmath.spec-fixtures/v1",
+  "curve": "secp256k1",
+  "opcode": "OP_MODINV",
+  "status": "proposed",
+  "source": "TECHNICAL_ADDENDUM.md",
+  "cases": [
+    {
+      "id": "MODINV-01",
+      "description": "1^-1 mod p = 1",
+      "input": {
+        "value": "0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "inverse": "0000000000000000000000000000000000000000000000000000000000000001"
+        }
+      }
+    },
+    {
+      "id": "MODINV-02",
+      "description": "2^-1 mod p",
+      "input": {
+        "value": "0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "inverse": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffe18"
+        }
+      }
+    },
+    {
+      "id": "MODINV-03",
+      "description": "3^-1 mod p",
+      "input": {
+        "value": "0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "inverse": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa9fffffd75"
+        }
+      }
+    },
+    {
+      "id": "MODINV-04",
+      "description": "(p - 1)^-1 mod p = p - 1",
+      "input": {
+        "value": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e"
+      },
+      "expect": {
+        "success": true,
+        "output": {
+          "inverse": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e"
+        }
+      }
+    },
+    {
+      "id": "MODINV-05",
+      "description": "value 0 must fail",
+      "input": {
+        "value": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": {
+        "success": false,
+        "error": "value out of range"
+      }
+    },
+    {
+      "id": "MODINV-06",
+      "description": "value p must fail canonical parsing",
+      "input": {
+        "value": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+      },
+      "expect": {
+        "success": false,
+        "error": "field element >= p"
+      }
+    },
+    {
+      "id": "MODINV-07",
+      "description": "value p + 1 must fail canonical parsing",
+      "input": {
+        "value": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc30"
+      },
+      "expect": {
+        "success": false,
+        "error": "field element >= p"
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # EC Math VM Fixtures
 
-This folder contains raw-bytecode execution fixtures for the EC math proposal.
+This folder contains raw-bytecode execution fixtures for BCH locking scripts.
 
 ## Layout
 
@@ -36,7 +36,7 @@ Failure `error` strings are descriptive only and are not consensus-critical.
 ## Coverage
 
 The VM fixtures focus on consensus exploit boundaries that require actual
-script execution:
+locking-script execution:
 
 - empty-stack and underflow failures
 - malformed push encodings in unlocking bytecode

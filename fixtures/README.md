@@ -1,6 +1,6 @@
 # EC Math Fixtures
 
-This folder contains machine-readable fixture sets for the EC math proposal.
+This folder contains machine-readable fixture sets for the EC math locking-script proposal.
 
 ## Layout
 
@@ -38,7 +38,7 @@ Failure `error` strings are descriptive only and are not consensus-critical.
 - Field elements and scalars are 32-byte big-endian hex strings.
 - For fixed-arity opcodes, the `input` object fields are named in the same logical order as the opcode operands.
 - For `OP_ECMULTMULTI`, `input.count` is a JSON integer and `input.terms` is an ordered array from first term to last term.
-- The JSON files describe logical operands, not raw serialized transactions. A harness should map each case to the opcode's stack order before execution.
+- The JSON files describe logical operands for locking-script validation, not raw serialized transactions. A harness should map each case to the opcode's stack order before execution.
 
 ## Coverage
 
@@ -50,7 +50,7 @@ The fixture sets intentionally include edge and failure cases for consensus safe
 - later-term validation failures in `OP_ECMULTMULTI`
 - count/term mismatches in `OP_ECMULTMULTI`
 
-The logical fixtures model operand semantics. The VM execution fixtures in `vm/` cover byte-level consensus issues such as:
+The logical fixtures model operand semantics. The VM execution fixtures in `vm/` cover byte-level locking-script issues such as:
 
 - stack underflow or missing operands
 - extra stack items left behind after execution
@@ -58,7 +58,7 @@ The logical fixtures model operand semantics. The VM execution fixtures in `vm/`
 - minimal-push and canonical-push requirements
 - atomic failure with no partial outputs left on the stack
 
-The VM suite currently covers the consensus-critical `OP_ECADD` and `OP_ECMUL` paths. It can be extended with follow-on opcodes once their interfaces are finalized.
+The VM suite currently covers the consensus-critical `OP_ECADD` and `OP_ECMUL` locking-script paths. It can be extended with follow-on opcodes once their interfaces are finalized.
 
 ## Validation
 

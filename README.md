@@ -25,7 +25,7 @@ The purpose of these opcodes is to provide the elliptic-curve arithmetic needed 
 The thread converged on a practical need, not just a general desire for more math:
 
 - BCH locking scripts need point addition and scalar multiplication to validate EC relationships directly
-- proof systems, aggregate signatures, covenant logic, and custom cryptographic protocols benefit from native curve operations
+- proof-carrying protocols, aggregate signatures, covenant logic, and custom cryptographic protocols benefit from native curve operations
 - emulation in script is possible but far too expensive for real-world use
 
 The discussion also made two requirements clear:
@@ -204,8 +204,8 @@ The thread identified the first concrete use cases that justify the CHIP:
 
 - EC commitment validation and covenant authorization logic
 - MuSig-style aggregation and related threshold signing workflows
-- proof verification and other developer-defined locking-script protocols
-- future SNARK/STARK verifier components
+- proof-carrying locking-script protocols and other developer-defined script logic
+- future SNARK/STARK-style locking-script components
 
 At least one end-to-end locking-script example SHOULD accompany the final CHIP submission so the network can evaluate a real BCH transaction use case, not just a toy example.
 
@@ -270,7 +270,7 @@ These opcodes are being explored as potential additions to this CHIP:
 - `OP_MODINV`
 - `OP_ECMULTGEN`
 - `OP_ECMULTMULTI`
-- pairing-based verification
+- pairing-based protocol support
 
 This is actively being discussed in [Bitcoin Cash Research thread](https://bitcoincashresearch.org/t/chip-2025-05-native-elliptic-curve-arithmetic-operations/1570/14)
 

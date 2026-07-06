@@ -35,8 +35,8 @@ The addendum assumes secp256k1 unless otherwise noted.
 It is useful for:
 
 - affine point arithmetic implemented directly in the VM
-- batch inversion tricks used by proof verifiers
-- field arithmetic inside custom zero-knowledge verifiers
+- batch inversion tricks used by proof-validation scripts
+- field arithmetic inside custom zero-knowledge validation scripts
 - generic cryptographic constructions that need division in `F_p`
 
 This is the most broadly useful support primitive beyond `ECADD` and `ECMUL`.
@@ -65,7 +65,7 @@ Top-to-bottom stack outputs:
 
 ### Why it matters
 
-Pedersen-based constructions and Bulletproof-style verifiers often reduce many inversions to a single inversion plus a linear number of multiplications via batch division. That makes `OP_MODINV` disproportionately useful for verifier code.
+Pedersen-based constructions and Bulletproof-style validation scripts often reduce many inversions to a single inversion plus a linear number of multiplications via batch division. That makes `OP_MODINV` disproportionately useful for locking-script code.
 
 Without `OP_MODINV`, a script can still emulate inversion using `OP_DEFINE`/`OP_INVOKE` plus `OP_BEGIN`/`OP_UNTIL`, typically by coding the extended Euclidean algorithm or an exponentiation-based inverse. That is feasible, but it is still a loop-heavy subroutine with on the order of thousands of big-int operations and substantial stack churn, so the VM cost stays materially higher than a native primitive.
 
@@ -80,7 +80,7 @@ Recommended cost properties:
 - likely in the low-thousands to low-tens-of-thousands of operation cost, depending on the chosen benchmark target
 - benchmarked against a reference `libsecp256k1`-style implementation before activation
 
-The final cost should be chosen so that practical verifier code can use the opcode, but unbounded repeated inversion remains expensive enough to discourage abuse.
+The final cost should be chosen so that practical locking-script code can use the opcode, but unbounded repeated inversion remains expensive enough to discourage abuse.
 
 ### Spec questions to resolve
 
@@ -98,9 +98,9 @@ It is useful for:
 
 - public key generation
 - Pedersen commitments with fixed generators
-- Schnorr-style verifier constructions
+- Schnorr-style locking-script constructions
 - MuSig-style and threshold signing workflows
-- many common proof systems that reuse a fixed base point
+- many common protocols that reuse a fixed base point
 
 This is one of the strongest candidates for a follow-on opcode because it is common, safe, and easier to optimize than generic scalar multiplication.
 
@@ -129,7 +129,7 @@ Top-to-bottom stack outputs:
 
 ### Why it matters
 
-Many verifier formulas and commitment schemes repeatedly multiply the generator by a scalar. A fixed-base multiplication opcode can use precomputed tables and is normally substantially faster than generic `ECMUL`.
+Many locking-script formulas and commitment schemes repeatedly multiply the generator by a scalar. A fixed-base multiplication opcode can use precomputed tables and is normally substantially faster than generic `ECMUL`.
 
 Without `OP_ECMULTGEN`, scripts can still implement fixed-base multiplication by calling generic `ECMUL`, or by hardcoding a windowed ladder with `OP_DEFINE`/`OP_INVOKE` and `OP_BEGIN`/`OP_UNTIL`. That is still possible, but it remains bytecode-heavy and loop-heavy, and it keeps paying the generic-multiplication cost even when the base point is fixed.
 
@@ -142,7 +142,7 @@ Reasonable pricing goals:
 - same consensus safety as `ECMUL`
 - materially lower execution cost than generic point multiplication
 - potentially a few times cheaper than `ECMUL` when the precomputation tables are effective
-- bounded enough that fixed-base proofs remain practical without becoming a general compute loophole
+- bounded enough that fixed-base scripts remain practical without becoming a general compute loophole
 
 ### Spec questions to resolve
 
@@ -159,11 +159,11 @@ Reasonable pricing goals:
 
 It is useful for:
 
-- Bulletproof verifier equations
+- Bulletproof-style locking-script equations
 - aggregated commitments
-- batch signature verification
+- batch signature validation
 - MuSig-style multi-party constructions
-- any verifier whose dominant cost is a linear combination of curve points
+- any locking-script protocol whose dominant cost is a linear combination of curve points
 
 This is the opcode most directly associated with Bulletproof-style workloads.
 
@@ -210,9 +210,9 @@ Top-to-bottom stack outputs:
 
 ### Why it matters
 
-Bulletproof verification is MSM-heavy. The Bulletproofs paper notes that verification of multiple proofs can be batched and that multi-exponentiation is central to practical verification cost. A dedicated MSM opcode makes those workloads realistic in script.
+Bulletproof-style validation is MSM-heavy. The Bulletproofs paper notes that batched validation and multi-exponentiation are central to practical cost. A dedicated MSM opcode makes those workloads realistic in locking scripts.
 
-Without `OP_ECMULTMULTI`, a verifier has to expand the MSM into many separate `ECMUL` and `ECADD` steps, usually wrapped in `OP_BEGIN`/`OP_UNTIL` loops and helper functions. That still works, but the VM must pay for every scalar multiply, every addition, and every loop dispatch, which is exactly why MSM-heavy proofs become expensive enough to threaten the current op-cost envelope.
+Without `OP_ECMULTMULTI`, a locking script has to expand the MSM into many separate `ECMUL` and `ECADD` steps, usually wrapped in `OP_BEGIN`/`OP_UNTIL` loops and helper functions. That still works, but the VM must pay for every scalar multiply, every addition, and every loop dispatch, which is exactly why MSM-heavy validation flows become expensive enough to threaten the current op-cost envelope.
 
 ### Cost model
 
@@ -230,9 +230,9 @@ Recommended cost properties:
 - cheaper than doing every term as a separate `ECMUL` + `ECADD`
 - still expensive enough that very large MSMs remain bounded by VM limits
 - linear or near-linear in the number of terms for consensus clarity
-- the per-term cost should be calibrated so a typical Bulletproof verifier stays well under the standard input budget, while very large MSMs remain infeasible
+- the per-term cost should be calibrated so a typical Bulletproof-style locking script stays well under the standard input budget, while very large MSMs remain infeasible
 
-For practical Bulletproof verification, the term cap should be chosen so that a typical verifier fits comfortably inside the existing VM cost envelope for standard inputs.
+For practical Bulletproof-style validation, the term cap should be chosen so that a typical locking script fits comfortably inside the existing VM cost envelope for standard inputs.
 
 ### Spec questions to resolve
 
@@ -258,7 +258,7 @@ Before any follow-on opcode is activated, the CHIP should include:
 - a worst-case input benchmark
 - cost comparison against emulation in script
 - a description of how the opcode fits within the existing operation-cost envelope
-- at least one real verifier or protocol sketch that motivates the primitive
+- at least one real locking-script example or protocol sketch that motivates the primitive
 
 ## Open Questions
 
@@ -300,12 +300,12 @@ In particular, if the network wants room for a future post-quantum replacement c
 
 ## Cost Envelope Summary
 
-Given the current VM Limits model, a standard input with 1,650 unlocking bytes has an operation-cost budget of about `1,352,800` cost units (`800 * (41 + 1650)`), so these opcodes should be judged by whether they enable a full verifier to fit comfortably inside that envelope.
+Given the current VM Limits model, a standard input with 1,650 unlocking bytes has an operation-cost budget of about `1,352,800` cost units (`800 * (41 + 1650)`), so these opcodes should be judged by whether they enable a full locking-script protocol to fit comfortably inside that envelope.
 
 Practical reading:
 
-- `OP_MODINV` should be cheap enough that a verifier can afford a few inversions, but expensive enough that repeated use is not a loophole.
-- `OP_ECMULTGEN` should be priced below `ECMUL` enough to matter in verifier-heavy scripts.
-- `OP_ECMULTMULTI` should probably be the main workhorse for Bulletproof-style verification, because its value comes from collapsing many curve operations into one bounded primitive.
+- `OP_MODINV` should be cheap enough that a locking script can afford a few inversions, but expensive enough that repeated use is not a loophole.
+- `OP_ECMULTGEN` should be priced below `ECMUL` enough to matter in validation-heavy scripts.
+- `OP_ECMULTMULTI` should probably be the main workhorse for Bulletproof-style locking-script validation, because its value comes from collapsing many curve operations into one bounded primitive.
 
 The forum discussion also emphasized that `ECADD` is orders of magnitude cheaper than emulation, and `ECMUL` is cheaper than `OP_CHECKSIG` in the same general cost regime, which supports keeping the base CHIP focused on the two essential primitives and pushing the rest into narrowly scoped follow-ons.

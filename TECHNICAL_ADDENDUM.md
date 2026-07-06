@@ -2,6 +2,8 @@
 
 This addendum collects the follow-on opcodes that are still plausibly worth standardizing after `OP_ECADD` and `OP_ECMUL`.
 
+These ideas extend native EC math for BCH locking scripts; they do not by themselves change transaction format or make BCH output values confidential.
+
 Several of these ideas are being explored by other teams as well. The point here is to keep only the primitives that materially expand capability or save orders of magnitude in script cost.
 
 The purpose is not to standardize all of these in one step. The purpose is to define the most plausible next primitives precisely enough that the CHIP can explain:

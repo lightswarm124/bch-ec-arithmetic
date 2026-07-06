@@ -7,31 +7,30 @@ Layer: Consensus
 Maintainer: Jerry Qian (lightswarm)
 Status: Draft
 Initial Publication Date: 2025-05-23
-Latest Revision Date: 2026-07-05
+Latest Revision Date: 2026-07-06
 Version: 0.2.0
 ```
 
 ## Abstract
 
-This CHIP defines two consensus opcodes for native secp256k1 affine elliptic-curve arithmetic:
+This CHIP defines two consensus opcodes for native secp256k1 affine elliptic-curve arithmetic in BCH locking scripts:
 
 - `OP_ECADD`
 - `OP_ECMUL`
 
-The purpose of these opcodes is to provide the elliptic-curve arithmetic needed to unlock practical verifier workloads such as Bulletproofs, ZK verifiers, confidential transactions, and related developer-defined protocols, while keeping the scope small enough to specify, implement, benchmark, and audit.
+The purpose of these opcodes is to provide the elliptic-curve arithmetic needed for locking-script validation and other developer-defined protocols, while keeping the scope small enough to specify, implement, benchmark, and audit.
 
 ## Motivation
 
 The thread converged on a practical need, not just a general desire for more math:
 
-- confidential-amount systems need point addition for balance checks
-- proof systems need scalar multiplication and multi-scalar routines for verifier logic
-- covenant, multisig, and custom cryptographic protocols benefit from native curve operations
+- BCH locking scripts need point addition and scalar multiplication to validate EC relationships directly
+- proof systems, aggregate signatures, covenant logic, and custom cryptographic protocols benefit from native curve operations
 - emulation in script is possible but far too expensive for real-world use
 
 The discussion also made two requirements clear:
 
-- the CHIP needs a real, concrete verifier use case, not just toy examples
+- the CHIP needs a real, concrete locking-script use case, not just toy examples
 - the initial spec should stay focused instead of expanding into a large math package
 
 ## Scope
@@ -54,8 +53,11 @@ The following are intentionally not included in this CHIP:
 - multi-scalar multiplication
 - pairings
 - generic curve selection
+- masked transfer balances or transaction-value confidentiality
 
 These can be proposed later if there is a separate use case and implementation budget.
+
+This proposal does not change transaction format or output visibility. It only adds EC math to locking-script evaluation.
 
 ## Review Assets
 
@@ -190,7 +192,7 @@ Consensus must reject:
 
 Reference code SHOULD use constant-time routines where practical.
 
-That is an implementation requirement, not a consensus requirement, but it matters because these operations are cryptographic primitives and will likely be used in sensitive verifier logic.
+That is an implementation requirement, not a consensus requirement, but it matters because these operations are cryptographic primitives and will likely be used in sensitive locking-script logic.
 
 ### Scope control
 
@@ -200,12 +202,12 @@ The thread made clear that scope creep is a real risk. Keeping the first CHIP to
 
 The thread identified the first concrete use cases that justify the CHIP:
 
-- confidential-amount balance checks using Pedersen commitments
-- Bulletproof-style range proof verification
+- EC commitment validation and covenant authorization logic
 - MuSig-style aggregation and related threshold signing workflows
+- proof verification and other developer-defined locking-script protocols
 - future SNARK/STARK verifier components
 
-At least one end-to-end verifier script SHOULD accompany the final CHIP submission so the network can evaluate a real use case, not just a toy example.
+At least one end-to-end locking-script example SHOULD accompany the final CHIP submission so the network can evaluate a real BCH transaction use case, not just a toy example.
 
 ## Test Vectors
 
@@ -235,7 +237,7 @@ The open items that should be resolved before activation are:
 - final opcode numbering or opcode-family encoding
 - exact op-cost constants
 - reference implementation benchmark results
-- a real verifier or covenant demonstrating practical utility
+- a real locking-script example or covenant demonstrating practical utility
 
 ### Current BCHN Opcode Window
 

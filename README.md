@@ -241,12 +241,12 @@ The open items that should be resolved before activation are:
 
 ### Current BCHN Opcode Window
 
-BCHN currently leaves the `0xbd`-`0xbf` window unassigned, and this proposal leaves those bytes untouched for other future work. For the EC proposal itself, the usable reserve space starts at `0xd6` and is split by BCHN's `0xef` token prefix:
+BCHN already defines the `0xbd`-`0xbf` window, but this proposal leaves those bytes untouched for other future work. For the EC proposal itself, the cleanest contiguous reserve block starts at `0xd6` and runs through `0xfe`:
 
 - `0xd6`-`0xee`
 - `0xf0`-`0xfe`
 
-`0xef` is not a normal candidate because BCHN uses it as `SPECIAL_TOKEN_PREFIX`, and `0xff` is `INVALIDOPCODE`. That means the practical reserve region is `0xd6`-`0xee` and `0xf0`-`0xfe`, with `0xef` excluded.
+`0xef` is not a normal candidate because BCHN uses it as `SPECIAL_TOKEN_PREFIX`, and `0xff` is `INVALIDOPCODE`. That means `0xd6`-`0xfe` is the largest practical reserve region available for future EC or post-quantum families, even though `0xef` itself must remain excluded.
 
 ### Opcode Family Proposal
 
@@ -259,7 +259,7 @@ One forum proposal suggests reserving a single opcode prefix for EC arithmetic, 
 - `0xdf`-`0xee` = additional reserve space
 - `0xf0`-`0xfe` = additional reserve space
 
-The benefit is opcode-surface conservation: future EC primitives can be added without burning a new top-level opcode every time. The tradeoff is that a family design would need a concrete selector encoding and dispatch rule, because the opcode bytes themselves are still only one byte wide. This is the most practical way to preserve room for future curve families, including any later post-quantum replacement for secp256k1, while keeping the reserve bytes explicitly aligned to BCHN's current map.
+The benefit is opcode-surface conservation: future EC primitives can be added without burning a new top-level opcode every time. The tradeoff is that a family design would need a concrete selector encoding and dispatch rule, because the opcode bytes themselves are still only one byte wide. This is the only realistic way to make room for future curve families, including any later post-quantum replacement for secp256k1, while keeping the reserve block as contiguous as BCHN allows.
 
 These reserved bytes matter because the loop and function opcodes can make an emulation readable, but they do not change the arithmetic cost class. In practice, `OP_DEFINE`/`OP_INVOKE` and `OP_BEGIN`/`OP_UNTIL` only restructure the work that `ECADD`, `ECMUL`, and the addendum opcodes would otherwise remove.
 

@@ -271,7 +271,7 @@ These should be resolved before any of the follow-ons move from addendum to stan
 
 ## Opcode Namespace Proposal
 
-A discussion proposal suggests reserving a single prefix byte for EC arithmetic and using a selector carried as script data rather than as a multi-byte opcode. BCHN's current opcode map already uses `0xbc` for `OP_REVERSEBYTES`, so `0xbc` is not available for this purpose. BCHN currently leaves the `0xbd`-`0xbf` window unassigned. For this proposal, the first EC bytes should start at `0xd6` so that `0xbd`-`0xbf` remain available for unrelated future proposals:
+A discussion proposal suggests reserving a single prefix byte for EC arithmetic and using a selector carried as script data rather than as a multi-byte opcode. BCHN's current opcode map already uses `0xbc` for `OP_REVERSEBYTES`, so `0xbc` is not available for this purpose. For this proposal, the first EC bytes should start at `0xd6` so that `0xbd`-`0xbf` remain available for unrelated future proposals:
 
 - `0xd6` = `OP_ECADD`
 - `0xd7` = `OP_ECMUL`
@@ -280,9 +280,9 @@ A discussion proposal suggests reserving a single prefix byte for EC arithmetic 
 - `0xdf`-`0xee` = additional reserve space
 - `0xf0`-`0xfe` = additional reserve space
 
-The strongest argument for this approach is opcode-surface conservation. It lets the network standardize a family once, then add narrowly scoped follow-ons without consuming fresh top-level opcode space each time. That matters because BCHN only leaves disjoint reserve spans around the `0xef` token prefix, so the proposal should name its usable bytes explicitly.
+The strongest argument for this approach is opcode-surface conservation. It lets the network standardize a family once, then add narrowly scoped follow-ons without consuming fresh top-level opcode space each time. That matters because the BCHN map does not leave a larger contiguous free range for future EC math.
 
-If the network wants additional room for future curve families beyond the current opcode window, the usable reserve spans are:
+If the network wants additional room for future curve families beyond the current opcode window, the cleanest contiguous reserve block starts at `0xd6` and runs through `0xfe`:
 
 - `0xd6`-`0xee`
 - `0xf0`-`0xfe`

@@ -1,0 +1,63 @@
+pragma cashscript 0.14.0;
+
+// Minimal linked-input state-handoff harness.
+//
+// This models the verifier.cash execution pattern: input 0 computes an
+// intermediate state, then binds that state to the second pushed argument of
+// input 1's unlocking bytecode. Input 1 verifies the handoff and the terminal
+// state. The two inputs are atomic, position-bound, and locked by the same
+// program. The state values remain user-supplied; the constructor only fixes
+// the domain and the initial/final public checkpoints.
+
+function deriveState(bytes32 domain, bytes32 state, bytes stageTag) returns (bytes) {
+    return sha256(domain + state + stageTag);
+}
+
+contract LinkedState(
+    bytes32 domainTag,
+    bytes32 initialState,
+    bytes32 finalState
+) {
+    function step(bytes32 currentState, bytes32 nextState) {
+        int inputIndex = this.activeInputIndex;
+
+        require(tx.inputs.length == 2);
+        require(
+            tx.inputs[0].lockingBytecode == tx.inputs[1].lockingBytecode
+        );
+
+        if (inputIndex == 0) {
+            require(currentState == initialState);
+            require(
+                nextState == deriveState(domainTag, currentState, 0x00)
+            );
+            bytes nextArguments, bytes nextProgram =
+                tx.inputs[1].unlockingBytecode.split(66);
+            bytes nextTerminalPrefix, bytes nextCurrentPrefix =
+                nextArguments.split(33);
+            bytes nextTerminalPush, bytes nextTerminalState =
+                nextTerminalPrefix.split(1);
+            bytes nextCurrentPush, bytes nextCurrentState =
+                nextCurrentPrefix.split(1);
+            require(nextTerminalPush == 0x20);
+            require(nextTerminalState == finalState);
+            require(nextCurrentPush == 0x20);
+            require(nextCurrentState == nextState);
+            require(nextProgram.length > 0);
+        } else {
+            bytes previousPrefix, bytes previousRemainder =
+                tx.inputs[0].unlockingBytecode.split(33);
+            require(previousRemainder.length > 0);
+            bytes previousPushOpcode, bytes previousPushedState =
+                previousPrefix.split(1);
+            require(previousPushOpcode == 0x20);
+            require(previousPushedState == currentState);
+            require(
+                nextState == deriveState(domainTag, currentState, 0x01)
+            );
+            require(nextState == finalState);
+        }
+
+        require(true);
+    }
+}

@@ -1,0 +1,519 @@
+pragma cashscript 0.14.0;
+
+// Experimental EC/scalar emulation for comparison with future native opcodes.
+//
+// This file deliberately uses CashScript integer arithmetic instead of
+// OP_ECADD/OP_ECMUL/OP_MODINV. Coordinates and scalars are passed as
+// nonnegative
+// VM integers. The implementation is secp256k1-specific and its cryptographic
+// logic is complete, but full-width proofs exceed the current BCH VM density
+// limit and are not deployable without native EC/scalar operations.
+
+function fieldMod(int value) returns (int) {
+    int modulus = 115792089237316195423570985008687907853269984665640564039457584007908834671663;
+    int result = value % modulus;
+    if (result < 0) result = result + modulus;
+    return result;
+}
+
+function scalarMod(int value) returns (int) {
+    int order = 115792089237316195423570985008687907852837564279074904382605163141518161494337;
+    int result = value % order;
+    if (result < 0) result = result + order;
+    return result;
+}
+
+function canonicalField(int value) returns (bool) {
+    int modulus = 115792089237316195423570985008687907853269984665640564039457584007908834671663;
+    return value >= 0 && value < modulus;
+}
+
+function canonicalScalar(int value) returns (bool) {
+    int order = 115792089237316195423570985008687907852837564279074904382605163141518161494337;
+    return value >= 0 && value < order;
+}
+
+function packPoint(int pointX, int pointY) returns (bytes) {
+    return toPaddedBytes(pointX, 33) + toPaddedBytes(pointY, 33);
+}
+
+function unpackX(bytes point) returns (int) {
+    bytes pointX, bytes pointY = point.split(33);
+    require(pointY == pointY);
+    return int(pointX);
+}
+
+function unpackY(bytes point) returns (int) {
+    bytes pointX, bytes pointY = point.split(33);
+    require(pointX == pointX);
+    return int(pointY);
+}
+
+function unpackJacobianY(bytes point) returns (int) {
+    bytes pointX, bytes remaining = point.split(33);
+    bytes pointY, bytes suffix = remaining.split(33);
+    require(pointX == pointX && suffix == suffix);
+    return int(pointY);
+}
+
+function toBigEndian32(int value) returns (bytes) {
+    bytes signPadded = toPaddedBytes(value, 33);
+    bytes signByte, bytes littleEndian = signPadded.reverse().split(1);
+    require(signByte == signByte);
+    return littleEndian;
+}
+
+function modInverse(int value) returns (int) {
+    int modulus = 115792089237316195423570985008687907853269984665640564039457584007908834671663;
+    int a = fieldMod(value);
+    require(a != 0);
+
+    int b = modulus;
+    int coefficientA = 0;
+    int coefficientB = 1;
+
+    do {
+        int quotient = b / a;
+        int remainder = b % a;
+        b = a;
+        a = remainder;
+
+        int nextCoefficient = coefficientA - quotient * coefficientB;
+        coefficientA = coefficientB;
+        coefficientB = nextCoefficient;
+    } while (a != 0);
+
+    // The final Bezout coefficient is in (-modulus, modulus). Normalize with
+    // branches so each inversion avoids one more large-number division.
+    if (coefficientA < 0) coefficientA = coefficientA + modulus;
+    if (coefficientA >= modulus) coefficientA = coefficientA - modulus;
+    return coefficientA;
+}
+
+function pointIsInfinity(bytes point) returns (bool) {
+    return unpackX(point) == 0 && unpackY(point) == 0;
+}
+
+function pointOnCurve(bytes point) returns (bool) {
+    int pointX = unpackX(point);
+    int pointY = unpackY(point);
+    bool valid = pointX == 0 && pointY == 0;
+    if (!valid) {
+        valid = fieldMod(pointY * pointY - pointX * pointX * pointX - 7) == 0;
+    }
+    return valid;
+}
+
+function validPublicPoint(bytes point) returns (bool) {
+    return !pointIsInfinity(point) && pointOnCurve(point);
+}
+
+function pointNegate(bytes point) returns (bytes) {
+    int pointX = unpackX(point);
+    int pointY = unpackY(point);
+    int modulus = 115792089237316195423570985008687907853269984665640564039457584007908834671663;
+    int resultY = pointY;
+    if (pointY != 0) resultY = fieldMod(modulus - pointY);
+    return packPoint(pointX, resultY);
+}
+
+function packJacobian(int pointX, int pointY, int pointZ) returns (bytes) {
+    return toPaddedBytes(pointX, 33) +
+        toPaddedBytes(pointY, 33) +
+        toPaddedBytes(pointZ, 33);
+}
+
+function unpackZ(bytes point) returns (int) {
+    bytes pointXY, bytes pointZ = point.split(66);
+    require(pointXY == pointXY);
+    return int(pointZ);
+}
+
+function affineToJacobian(bytes point) returns (bytes) {
+    int pointX = unpackX(point);
+    int pointY = unpackY(point);
+    int pointZ = 1;
+    if (pointIsInfinity(point)) pointZ = 0;
+    return packJacobian(pointX, pointY, pointZ);
+}
+
+function jacobianDouble(bytes point) returns (bytes) {
+    int pointX = unpackX(point);
+    int pointY = unpackJacobianY(point);
+    int pointZ = unpackZ(point);
+
+    bytes result = packJacobian(0, 0, 0);
+    if (pointZ != 0 && pointY != 0) {
+        int yy = fieldMod(pointY * pointY);
+        int yyyy = fieldMod(yy * yy);
+        int s = fieldMod(4 * pointX * yy);
+        int m = fieldMod(3 * pointX * pointX);
+        int resultX = fieldMod(m * m - 2 * s);
+        int resultY = fieldMod(m * (s - resultX) - 8 * yyyy);
+        int resultZ = fieldMod(2 * pointY * pointZ);
+        result = packJacobian(resultX, resultY, resultZ);
+    }
+    return result;
+}
+
+function jacobianAdd(bytes firstPoint, bytes secondPoint, int secondZZ) returns (bytes) {
+    int firstX = unpackX(firstPoint);
+    int firstY = unpackJacobianY(firstPoint);
+    int firstZ = unpackZ(firstPoint);
+    int secondX = unpackX(secondPoint);
+    int secondY = unpackJacobianY(secondPoint);
+    int secondZ = unpackZ(secondPoint);
+
+    bytes result = packJacobian(0, 0, 0);
+    if (firstZ == 0) {
+        result = secondPoint;
+    } else if (secondZ == 0) {
+        result = firstPoint;
+    } else {
+        int firstZZ = fieldMod(firstZ * firstZ);
+        int firstU = fieldMod(firstX * secondZZ);
+        int secondU = fieldMod(secondX * firstZZ);
+        int firstS = fieldMod(firstY * secondZ * secondZZ);
+        int secondS = fieldMod(secondY * firstZ * firstZZ);
+
+        if (firstU == secondU) {
+            if (firstS == secondS) {
+                result = jacobianDouble(firstPoint);
+            }
+        } else {
+            int h = fieldMod(secondU - firstU);
+            int i = fieldMod(4 * h * h);
+            int j = fieldMod(h * i);
+            int r = fieldMod(2 * (secondS - firstS));
+            int v = fieldMod(firstU * i);
+            int resultX = fieldMod(r * r - j - 2 * v);
+            int resultY = fieldMod(r * (v - resultX) - 2 * firstS * j);
+            int resultZ = fieldMod(
+                ((firstZ + secondZ) * (firstZ + secondZ) - firstZZ - secondZZ) * h
+            );
+            result = packJacobian(resultX, resultY, resultZ);
+        }
+    }
+    return result;
+}
+
+// The multi-scalar loop keeps its addends affine (Z = 1). This mixed-add
+// variant avoids calculating the second point's projective powers on every
+// bit, which is material when emulating 256-bit scalar multiplication.
+function jacobianMixedAdd(bytes firstPoint, bytes secondPoint) returns (bytes) {
+    int firstX = unpackX(firstPoint);
+    int firstY = unpackJacobianY(firstPoint);
+    int firstZ = unpackZ(firstPoint);
+    int secondX = unpackX(secondPoint);
+    int secondY = unpackY(secondPoint);
+
+    bytes result = packJacobian(0, 0, 0);
+    if (firstZ == 0) {
+        result = affineToJacobian(secondPoint);
+    } else {
+        int firstZZ = fieldMod(firstZ * firstZ);
+        int secondU = fieldMod(secondX * firstZZ);
+        int secondS = fieldMod(secondY * firstZ * firstZZ);
+        int h = fieldMod(secondU - firstX);
+
+        if (h == 0) {
+            if (secondS == firstY) result = jacobianDouble(firstPoint);
+        } else {
+            int i = fieldMod(4 * h * h);
+            int j = fieldMod(h * i);
+            int r = fieldMod(2 * (secondS - firstY));
+            int v = fieldMod(firstX * i);
+            int resultX = fieldMod(r * r - j - 2 * v);
+            int resultY = fieldMod(r * (v - resultX) - 2 * firstY * j);
+            int resultZ = fieldMod(2 * firstZ * h);
+            result = packJacobian(resultX, resultY, resultZ);
+        }
+    }
+    return result;
+}
+
+function jacobianToAffine(bytes point) returns (bytes) {
+    int pointX = unpackX(point);
+    int pointY = unpackJacobianY(point);
+    int pointZ = unpackZ(point);
+    bytes result = packPoint(0, 0);
+
+    if (pointZ != 0) {
+        int inverseZ = modInverse(pointZ);
+        int inverseZ2 = fieldMod(inverseZ * inverseZ);
+        int inverseZ3 = fieldMod(inverseZ2 * inverseZ);
+        result = packPoint(
+            fieldMod(pointX * inverseZ2),
+            fieldMod(pointY * inverseZ3)
+        );
+    }
+    return result;
+}
+
+function pointAdd(bytes firstPoint, bytes secondPoint) returns (bytes) {
+    bytes secondJacobian = affineToJacobian(secondPoint);
+    return jacobianToAffine(
+        jacobianAdd(
+            affineToJacobian(firstPoint),
+            secondJacobian,
+            fieldMod(unpackZ(secondJacobian) * unpackZ(secondJacobian))
+        )
+    );
+}
+
+function scalarMultiply(bytes point, int scalar) returns (bytes) {
+    require(pointOnCurve(point) && scalar >= 0);
+
+    int remaining = scalar;
+    bytes result = packJacobian(0, 0, 0);
+    bytes addend = affineToJacobian(point);
+
+    do {
+        if (remaining % 2 == 1) {
+            int addendZ = unpackZ(addend);
+            result = jacobianAdd(result, addend, fieldMod(addendZ * addendZ));
+        }
+        remaining = remaining / 2;
+        if (remaining > 0) addend = jacobianDouble(addend);
+    } while (remaining > 0);
+
+    return jacobianToAffine(result);
+}
+
+function jacobianEqualsAffine(bytes jacobianPoint, bytes affinePoint) returns (bool) {
+    int pointX = unpackX(jacobianPoint);
+    int pointY = unpackJacobianY(jacobianPoint);
+    int pointZ = unpackZ(jacobianPoint);
+    int affineX = unpackX(affinePoint);
+    int affineY = unpackY(affinePoint);
+    bool equal = pointZ == 0 && pointIsInfinity(affinePoint);
+
+    if (pointZ != 0) {
+        int z2 = fieldMod(pointZ * pointZ);
+        int z3 = fieldMod(z2 * pointZ);
+        equal =
+            fieldMod(pointX - affineX * z2) == 0 &&
+            fieldMod(pointY - affineY * z3) == 0;
+    }
+    return equal;
+}
+
+// Most verification equations are two-scalar expressions. Processing both
+// scalars together avoids materializing four scalar-multiplication results
+// and two separate affine additions.
+function doubleScalarMultiply(
+    bytes firstPoint,
+    int firstScalar,
+    bytes secondPoint,
+    int secondScalar,
+    bytes combinedPoint
+) returns (bytes) {
+    require(firstScalar >= 0 && secondScalar >= 0);
+
+    int firstRemaining = firstScalar;
+    int secondRemaining = secondScalar;
+    int bitMask = 1 << 255;
+    bytes result = packJacobian(0, 0, 0);
+    bytes firstAddend = firstPoint;
+    bytes secondAddend = secondPoint;
+    bytes combinedAddend = combinedPoint;
+    int combinedZ = unpackZ(combinedAddend);
+    int combinedZZ = fieldMod(combinedZ * combinedZ);
+
+    do {
+        result = jacobianDouble(result);
+        if (firstRemaining >= bitMask) {
+            firstRemaining = firstRemaining - bitMask;
+            if (secondRemaining >= bitMask) {
+                secondRemaining = secondRemaining - bitMask;
+                result = jacobianAdd(result, combinedAddend, combinedZZ);
+            } else {
+                result = jacobianMixedAdd(result, firstAddend);
+            }
+        } else if (secondRemaining >= bitMask) {
+            secondRemaining = secondRemaining - bitMask;
+            result = jacobianMixedAdd(result, secondAddend);
+        }
+        bitMask = bitMask >> 1;
+    } while (bitMask > 0);
+
+    return result;
+}
+
+// A bounded counterpart used to demonstrate the same equations with small
+// scalar inputs. It is deliberately not a production proof: its cost is
+// proportional to the supplied scalar width, so it is useful for isolating
+// arithmetic correctness from the BCH density limit.
+function boundedDoubleScalarMultiply(
+    bytes firstPoint,
+    int firstScalar,
+    bytes secondPoint,
+    int secondScalar
+) returns (bytes) {
+    require(firstScalar >= 0 && secondScalar >= 0);
+
+    int firstRemaining = firstScalar;
+    int secondRemaining = secondScalar;
+    int bitMask = 2;
+    bytes result = packJacobian(0, 0, 0);
+    bytes firstAddend = firstPoint;
+    bytes secondAddend = secondPoint;
+
+    do {
+        result = jacobianDouble(result);
+        if (firstRemaining >= bitMask) {
+            firstRemaining = firstRemaining - bitMask;
+            result = jacobianMixedAdd(result, firstAddend);
+        }
+        if (secondRemaining >= bitMask) {
+            secondRemaining = secondRemaining - bitMask;
+            result = jacobianMixedAdd(result, secondAddend);
+        }
+        bitMask = bitMask / 2;
+    } while (bitMask > 0);
+
+    return result;
+}
+
+function pointsEqual(bytes firstPoint, bytes secondPoint) returns (bool) {
+    return firstPoint == secondPoint;
+}
+
+function hashDleqTranscript(
+    bytes tagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int statementPointX,
+    int statementPointY,
+    int relatedPointX,
+    int relatedPointY,
+    int transcript1X,
+    int transcript1Y,
+    int transcript2X,
+    int transcript2Y,
+    bytes statementContext
+) returns (bytes) {
+    return sha256(
+        tagHash +
+        tagHash +
+        toBigEndian32(generatorX) +
+        toBigEndian32(generatorY) +
+        toBigEndian32(independentPointX) +
+        toBigEndian32(independentPointY) +
+        toBigEndian32(statementPointX) +
+        toBigEndian32(statementPointY) +
+        toBigEndian32(relatedPointX) +
+        toBigEndian32(relatedPointY) +
+        toBigEndian32(transcript1X) +
+        toBigEndian32(transcript1Y) +
+        toBigEndian32(transcript2X) +
+        toBigEndian32(transcript2Y) +
+        statementContext
+    );
+}
+
+contract EmulatedDleq(
+    bytes dleqTagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int statementPointX,
+    int statementPointY,
+    int relatedPointX,
+    int relatedPointY,
+    bytes statementContext
+) {
+    function verify(
+        bytes challengeBytes,
+        int challenge,
+        int response,
+        int transcript1X,
+        int transcript1Y,
+        int transcript2X,
+        int transcript2Y
+    ) {
+        require(
+            canonicalField(generatorX) && canonicalField(generatorY) &&
+            canonicalField(independentPointX) && canonicalField(independentPointY) &&
+            canonicalField(statementPointX) && canonicalField(statementPointY) &&
+            canonicalField(relatedPointX) && canonicalField(relatedPointY) &&
+            canonicalField(transcript1X) && canonicalField(transcript1Y) &&
+            canonicalField(transcript2X) && canonicalField(transcript2Y) &&
+            canonicalScalar(challenge) && canonicalScalar(response)
+        );
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes statementPoint = packPoint(statementPointX, statementPointY);
+        bytes relatedPoint = packPoint(relatedPointX, relatedPointY);
+        bytes transcript1 = packPoint(transcript1X, transcript1Y);
+        bytes transcript2 = packPoint(transcript2X, transcript2Y);
+
+        // The two transcript points are checked by the equations below. A
+        // separate curve-membership pass would repeat work without changing
+        // the accepted result.
+        require(
+            validPublicPoint(generator) &&
+            validPublicPoint(independentPoint) &&
+            validPublicPoint(statementPoint) &&
+            validPublicPoint(relatedPoint)
+        );
+        require(challengeBytes == toBigEndian32(challenge));
+        require(
+            hashDleqTranscript(
+                dleqTagHash,
+                generatorX,
+                generatorY,
+                independentPointX,
+                independentPointY,
+                statementPointX,
+                statementPointY,
+                relatedPointX,
+                relatedPointY,
+                transcript1X,
+                transcript1Y,
+                transcript2X,
+                transcript2Y,
+                statementContext
+            ) == challengeBytes
+        );
+
+        bytes negativeStatement = pointNegate(statementPoint);
+        bytes negativeRelated = pointNegate(relatedPoint);
+        bytes combined1Projective = jacobianMixedAdd(
+            affineToJacobian(generator),
+            negativeStatement
+        );
+        bytes combined2Projective = jacobianMixedAdd(
+            affineToJacobian(independentPoint),
+            negativeRelated
+        );
+        require(
+            jacobianEqualsAffine(
+                doubleScalarMultiply(
+                    generator,
+                    response,
+                    negativeStatement,
+                    challenge,
+                    combined1Projective
+                ),
+                transcript1
+            )
+        );
+        require(
+            jacobianEqualsAffine(
+                doubleScalarMultiply(
+                    independentPoint,
+                    response,
+                    negativeRelated,
+                    challenge,
+                    combined2Projective
+                ),
+                transcript2
+            )
+        );
+    }
+}

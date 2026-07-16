@@ -1,0 +1,68 @@
+pragma cashscript 0.14.0;
+
+import "./ec-emulation.cash";
+
+// Bounded secp256k1 equation verifier. This contract uses the same curve
+// formulas as EmulatedDleq, but scans only the supplied small scalars. It is
+// an arithmetic/cost harness, not a cryptographically sound Fiat-Shamir
+// verifier, because the challenge is intentionally reduced to one byte.
+contract EmulatedDleqBounded(
+    bytes dleqTagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int statementPointX,
+    int statementPointY,
+    int relatedPointX,
+    int relatedPointY,
+    bytes statementContext
+) {
+    function verifyBounded(
+        bytes challengeByte,
+        int challenge,
+        int response,
+        int transcript1X,
+        int transcript1Y,
+        int transcript2X,
+        int transcript2Y
+    ) {
+        require(challenge > 0 && challenge < 4 && response > 0 && response < 4);
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes statementPoint = packPoint(statementPointX, statementPointY);
+        bytes relatedPoint = packPoint(relatedPointX, relatedPointY);
+        bytes transcript1 = packPoint(transcript1X, transcript1Y);
+        bytes transcript2 = packPoint(transcript2X, transcript2Y);
+
+        require(
+            challengeByte.length == 1 &&
+            dleqTagHash == dleqTagHash &&
+            statementContext == statementContext
+        );
+
+        require(
+            jacobianEqualsAffine(
+                boundedDoubleScalarMultiply(
+                    generator,
+                    response,
+                    pointNegate(statementPoint),
+                    challenge
+                ),
+                transcript1
+            )
+        );
+        require(
+            jacobianEqualsAffine(
+                boundedDoubleScalarMultiply(
+                    independentPoint,
+                    response,
+                    pointNegate(relatedPoint),
+                    challenge
+                ),
+                transcript2
+            )
+        );
+    }
+}

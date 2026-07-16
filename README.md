@@ -63,8 +63,17 @@ This proposal does not change transaction format or output visibility. It only a
 
 - [Logical fixtures](./fixtures/README.md) cover canonical operand semantics for the core CHIP and follow-on candidates.
 - [VM fixtures](./fixtures/vm/README.md) cover bytecode-level consensus behavior for `OP_ECADD` and `OP_ECMUL`.
+- [CashScript emulation benchmarks](./benchmarks/cashscript/README.md) exercise the proposed operations' workload using user-defined functions and ordinary integer arithmetic.
+- [CashScript emulation findings](./docs/cashscript-emulation.md) record VM costs, Mocknet/CHIPNET outcomes, and non-production boundaries.
+- [Proposal comparison](./docs/ec-opcode-proposal-comparison.md) maps ECADD, ECMUL, and the three addendum operations to the benchmark evidence.
 - [Technical addendum](./TECHNICAL_ADDENDUM.md) sketches candidate follow-on opcodes and remaining design questions.
-- [package.json](./package.json) and the lockfile make `npm install` and `npm run validate` fully turnkey.
+- [package.json](./package.json) and the lockfile make `npm install` and `npm run validate` fully turnkey, including the CashScript benchmark suite.
+
+The benchmark is deliberately separate from the normative fixture sets. It
+does not change the CashScript compiler, and it does not claim that the
+full-width emulated proofs fit current BCH per-input limits. Its purpose is to
+show, with executable evidence, what native EC operations would remove from
+the script's arithmetic workload.
 
 ## Definitions
 
@@ -205,7 +214,8 @@ The thread identified the first concrete use cases that justify the CHIP:
 - EC commitment validation and covenant authorization logic
 - MuSig-style aggregation and related threshold signing workflows
 - proof-carrying locking-script protocols and other developer-defined script logic
-- future SNARK/STARK-style locking-script components
+- future EC-based proof components; pairing-based systems are a separate scope
+  question
 
 At least one end-to-end locking-script example SHOULD accompany the final CHIP submission so the network can evaluate a real BCH transaction use case, not just a toy example.
 

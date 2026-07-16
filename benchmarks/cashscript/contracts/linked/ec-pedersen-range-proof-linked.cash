@@ -1,0 +1,294 @@
+pragma cashscript 0.14.0;
+
+import "../ec-pedersen-range-proof.cash";
+
+// Four-input decomposition of the complete [0, 3] Pedersen OR proof. The
+// challenge and all branch witnesses stay runtime supplied; each input checks
+// one branch equation. The transcript digest is carried through adjacent
+// unlocking scripts, and each stage recomputes it before its EC equation.
+function linkedPedersenStateMatches(bytes32 expected, bytes unlocking) returns (bool) {
+    bytes prefix, bytes remainder = unlocking.split(33);
+    bytes pushOpcode, bytes pushedState = prefix.split(1);
+    return pushOpcode == 0x20 && pushedState == expected && remainder.length > 0;
+}
+
+function linkedPedersenState(
+    bytes tagHash,
+    bytes context,
+    bytes challengeBytes,
+    int challenge,
+    int challenge0,
+    int response0,
+    int transcript0X,
+    int transcript0Y,
+    int challenge1,
+    int response1,
+    int transcript1X,
+    int transcript1Y,
+    int challenge2,
+    int response2,
+    int transcript2X,
+    int transcript2Y,
+    int challenge3,
+    int response3,
+    int transcript3X,
+    int transcript3Y
+) returns (bytes) {
+    return sha256(
+        tagHash + context + challengeBytes +
+        toBigEndian32(challenge) +
+        toBigEndian32(challenge0) + toBigEndian32(response0) +
+        toBigEndian32(transcript0X) + toBigEndian32(transcript0Y) +
+        toBigEndian32(challenge1) + toBigEndian32(response1) +
+        toBigEndian32(transcript1X) + toBigEndian32(transcript1Y) +
+        toBigEndian32(challenge2) + toBigEndian32(response2) +
+        toBigEndian32(transcript2X) + toBigEndian32(transcript2Y) +
+        toBigEndian32(challenge3) + toBigEndian32(response3) +
+        toBigEndian32(transcript3X) + toBigEndian32(transcript3Y)
+    );
+}
+
+function verifyLinkedPedersenBranch(
+    bytes independentPoint,
+    bytes difference,
+    int response,
+    int challenge,
+    bytes transcript
+) returns (bool) {
+    bytes negativeDifference = pointNegate(difference);
+    bytes combined = jacobianMixedAdd(
+        affineToJacobian(independentPoint),
+        negativeDifference
+    );
+    return jacobianEqualsAffine(
+        doubleScalarMultiply(
+            independentPoint,
+            response,
+            negativeDifference,
+            challenge,
+            combined
+        ),
+        transcript
+    );
+}
+
+contract LinkedPedersenRangeProof(
+    bytes rangeProofTagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int commitmentX,
+    int commitmentY,
+    bytes statementContext,
+    int maximumValue
+) {
+    function verifyLinked(
+        bytes32 challengeBytes,
+        int challenge,
+        int challenge0,
+        int response0,
+        int transcript0X,
+        int transcript0Y,
+        int challenge1,
+        int response1,
+        int transcript1X,
+        int transcript1Y,
+        int challenge2,
+        int response2,
+        int transcript2X,
+        int transcript2Y,
+        int challenge3,
+        int response3,
+        int transcript3X,
+        int transcript3Y,
+        bytes32 stateCommitment
+    ) {
+        int inputIndex = this.activeInputIndex;
+
+        require(tx.inputs.length == 4);
+        require(
+            tx.inputs[0].lockingBytecode == tx.inputs[1].lockingBytecode &&
+            tx.inputs[1].lockingBytecode == tx.inputs[2].lockingBytecode &&
+            tx.inputs[2].lockingBytecode == tx.inputs[3].lockingBytecode
+        );
+        require(
+            stateCommitment == linkedPedersenState(
+                rangeProofTagHash,
+                statementContext,
+                challengeBytes,
+                challenge,
+                challenge0,
+                response0,
+                transcript0X,
+                transcript0Y,
+                challenge1,
+                response1,
+                transcript1X,
+                transcript1Y,
+                challenge2,
+                response2,
+                transcript2X,
+                transcript2Y,
+                challenge3,
+                response3,
+                transcript3X,
+                transcript3Y
+            )
+        );
+        if (inputIndex == 1) {
+            require(
+                linkedPedersenStateMatches(
+                    stateCommitment,
+                    tx.inputs[0].unlockingBytecode
+                ) &&
+                linkedPedersenStateMatches(
+                    stateCommitment,
+                    tx.inputs[2].unlockingBytecode
+                )
+            );
+        } else if (inputIndex == 2) {
+            require(
+                linkedPedersenStateMatches(
+                    stateCommitment,
+                    tx.inputs[1].unlockingBytecode
+                ) &&
+                linkedPedersenStateMatches(
+                    stateCommitment,
+                    tx.inputs[3].unlockingBytecode
+                )
+            );
+        } else if (inputIndex == 3) {
+            require(
+                linkedPedersenStateMatches(
+                    stateCommitment,
+                    tx.inputs[2].unlockingBytecode
+                )
+            );
+        }
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes commitment = packPoint(commitmentX, commitmentY);
+
+        if (inputIndex == 0) {
+            require(
+                maximumValue == 3 &&
+                canonicalField(generatorX) && canonicalField(generatorY) &&
+                canonicalField(independentPointX) && canonicalField(independentPointY) &&
+                canonicalField(commitmentX) && canonicalField(commitmentY) &&
+                canonicalField(transcript0X) && canonicalField(transcript0Y) &&
+                canonicalField(transcript1X) && canonicalField(transcript1Y) &&
+                canonicalField(transcript2X) && canonicalField(transcript2Y) &&
+                canonicalField(transcript3X) && canonicalField(transcript3Y) &&
+                canonicalScalar(challenge) && canonicalScalar(challenge0) &&
+                canonicalScalar(response0) && canonicalScalar(challenge1) &&
+                canonicalScalar(response1) && canonicalScalar(challenge2) &&
+                canonicalScalar(response2) && canonicalScalar(challenge3) &&
+                canonicalScalar(response3)
+            );
+            require(
+                validPublicPoint(generator) &&
+                validPublicPoint(independentPoint) &&
+                validPublicPoint(commitment)
+            );
+            require(challengeBytes == toBigEndian32(challenge));
+            require(
+                hashPedersenRangeTranscript(
+                    rangeProofTagHash,
+                    generatorX,
+                    generatorY,
+                    independentPointX,
+                    independentPointY,
+                    commitmentX,
+                    commitmentY,
+                    transcript0X,
+                    transcript0Y,
+                    transcript1X,
+                    transcript1Y,
+                    transcript2X,
+                    transcript2Y,
+                    transcript3X,
+                    transcript3Y,
+                    statementContext
+                ) == challengeBytes
+            );
+            require(
+                scalarMod(challenge0 + challenge1 + challenge2 + challenge3) ==
+                challenge
+            );
+        } else if (inputIndex == 1) {
+            require(
+                canonicalScalar(challenge) && canonicalScalar(challenge1) &&
+                canonicalScalar(response1) &&
+                canonicalField(transcript1X) && canonicalField(transcript1Y)
+            );
+            require(challengeBytes == toBigEndian32(challenge));
+        } else if (inputIndex == 2) {
+            require(
+                canonicalScalar(challenge) && canonicalScalar(challenge2) &&
+                canonicalScalar(response2) &&
+                canonicalField(transcript2X) && canonicalField(transcript2Y)
+            );
+            require(challengeBytes == toBigEndian32(challenge));
+        } else {
+            require(
+                canonicalScalar(challenge) && canonicalScalar(challenge3) &&
+                canonicalScalar(response3) &&
+                canonicalField(transcript3X) && canonicalField(transcript3Y)
+            );
+            require(challengeBytes == toBigEndian32(challenge));
+        }
+
+        if (inputIndex == 0) {
+            require(
+                verifyLinkedPedersenBranch(
+                    independentPoint,
+                    commitment,
+                    response0,
+                    challenge0,
+                    packPoint(transcript0X, transcript0Y)
+                )
+            );
+        } else if (inputIndex == 1) {
+            require(
+                verifyLinkedPedersenBranch(
+                    independentPoint,
+                    pointAdd(commitment, pointNegate(generator)),
+                    response1,
+                    challenge1,
+                    packPoint(transcript1X, transcript1Y)
+                )
+            );
+        } else if (inputIndex == 2) {
+            require(
+                verifyLinkedPedersenBranch(
+                    independentPoint,
+                    pointAdd(
+                        pointAdd(commitment, pointNegate(generator)),
+                        pointNegate(generator)
+                    ),
+                    response2,
+                    challenge2,
+                    packPoint(transcript2X, transcript2Y)
+                )
+            );
+        } else {
+            require(
+                verifyLinkedPedersenBranch(
+                    independentPoint,
+                    pointAdd(
+                        pointAdd(
+                            pointAdd(commitment, pointNegate(generator)),
+                            pointNegate(generator)
+                        ),
+                        pointNegate(generator)
+                    ),
+                    response3,
+                    challenge3,
+                    packPoint(transcript3X, transcript3Y)
+                )
+            );
+        }
+    }
+}

@@ -1,0 +1,178 @@
+pragma cashscript 0.14.0;
+
+import "./ec-emulation.cash";
+
+// Batch verification for the two equations in a Chaum-Pedersen DLEQ proof.
+// A transcript-derived rho reduces
+//   sG - cP = R1 and sH - cQ = R2
+// to one six-scalar equation. This keeps all points and scalars user-supplied
+// while adding only the standard negligible 1/N batch-verification error.
+
+function hashDleqBatchTranscript(
+    bytes tagHash,
+    bytes challengeBytes,
+    int response,
+    int transcript1X,
+    int transcript1Y,
+    int transcript2X,
+    int transcript2Y,
+    bytes statementContext
+) returns (bytes) {
+    return sha256(
+                tagHash +
+        tagHash +
+        0x01 +
+        challengeBytes +
+        toBigEndian32(response) +
+        toBigEndian32(transcript1X) +
+        toBigEndian32(transcript1Y) +
+        toBigEndian32(transcript2X) +
+        toBigEndian32(transcript2Y) +
+        statementContext
+    );
+}
+
+function fourScalarMultiply(
+    bytes point0,
+    int scalar0,
+    bytes point1,
+    int scalar1,
+    bytes point2,
+    int scalar2,
+    bytes point3,
+    int scalar3
+) returns (bytes) {
+    require(scalar0 >= 0 && scalar1 >= 0 && scalar2 >= 0 && scalar3 >= 0);
+
+    int remaining0 = scalar0;
+    int remaining1 = scalar1;
+    int remaining2 = scalar2;
+    int remaining3 = scalar3;
+    int bitMask = 1 << 255;
+    bytes result = packJacobian(0, 0, 0);
+
+    do {
+        result = jacobianDouble(result);
+        if (remaining0 >= bitMask) {
+            remaining0 = remaining0 - bitMask;
+            result = jacobianMixedAdd(result, point0);
+        }
+        if (remaining1 >= bitMask) {
+            remaining1 = remaining1 - bitMask;
+            result = jacobianMixedAdd(result, point1);
+        }
+        if (remaining2 >= bitMask) {
+            remaining2 = remaining2 - bitMask;
+            result = jacobianMixedAdd(result, point2);
+        }
+        if (remaining3 >= bitMask) {
+            remaining3 = remaining3 - bitMask;
+            result = jacobianMixedAdd(result, point3);
+        }
+        bitMask = bitMask >> 1;
+    } while (bitMask > 0);
+
+    return result;
+}
+
+contract EmulatedDleqBatched(
+    bytes dleqTagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int statementPointX,
+    int statementPointY,
+    int relatedPointX,
+    int relatedPointY,
+    bytes statementContext
+) {
+    function verifyBatched(
+        bytes challengeBytes,
+        int challenge,
+        int response,
+        int transcript1X,
+        int transcript1Y,
+        int transcript2X,
+        int transcript2Y,
+        int batchChallenge
+    ) {
+        require(
+            canonicalField(generatorX) && canonicalField(generatorY) &&
+            canonicalField(independentPointX) && canonicalField(independentPointY) &&
+            canonicalField(statementPointX) && canonicalField(statementPointY) &&
+            canonicalField(relatedPointX) && canonicalField(relatedPointY) &&
+            canonicalField(transcript1X) && canonicalField(transcript1Y) &&
+            canonicalField(transcript2X) && canonicalField(transcript2Y) &&
+            canonicalScalar(challenge) && canonicalScalar(response) &&
+            canonicalScalar(batchChallenge)
+        );
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes statementPoint = packPoint(statementPointX, statementPointY);
+        bytes relatedPoint = packPoint(relatedPointX, relatedPointY);
+        bytes transcript1 = packPoint(transcript1X, transcript1Y);
+        bytes transcript2 = packPoint(transcript2X, transcript2Y);
+
+        require(
+            validPublicPoint(generator) &&
+            validPublicPoint(independentPoint) &&
+            validPublicPoint(statementPoint) &&
+            validPublicPoint(relatedPoint)
+        );
+        require(challengeBytes == toBigEndian32(challenge));
+        require(
+            hashDleqTranscript(
+                dleqTagHash,
+                generatorX,
+                generatorY,
+                independentPointX,
+                independentPointY,
+                statementPointX,
+                statementPointY,
+                relatedPointX,
+                relatedPointY,
+                transcript1X,
+                transcript1Y,
+                transcript2X,
+                transcript2Y,
+                statementContext
+            ) == challengeBytes
+        );
+        require(
+            hashDleqBatchTranscript(
+                dleqTagHash,
+                challengeBytes,
+                response,
+                transcript1X,
+                transcript1Y,
+                transcript2X,
+                transcript2Y,
+                statementContext
+            ) == toBigEndian32(batchChallenge)
+        );
+
+        bytes negativeStatement = pointNegate(statementPoint);
+        bytes negativeRelated = pointNegate(relatedPoint);
+        bytes weightedTranscript = pointAdd(
+            transcript1,
+            scalarMultiply(transcript2, batchChallenge)
+        );
+        require(
+            jacobianEqualsAffine(
+                fourScalarMultiply(
+                    generator,
+                    response,
+                    independentPoint,
+                    scalarMod(response * batchChallenge),
+                    negativeStatement,
+                    challenge,
+                    negativeRelated,
+                    scalarMod(challenge * batchChallenge)
+                ),
+                weightedTranscript
+            )
+        );
+    }
+}

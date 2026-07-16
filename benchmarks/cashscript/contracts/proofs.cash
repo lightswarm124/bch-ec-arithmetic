@@ -1,0 +1,319 @@
+pragma cashscript 0.14.0;
+
+// Minimal proof-of-knowledge operand-plumbing contract.
+//
+// Each verifier accepts the EC intermediate values that native operations
+// would produce. Until those operations are available, this contract can only
+// validate fixed-width/nonzero operands and Fiat-Shamir transcript hashes; it
+// cannot prove the EC equations represented by those operands.
+
+function canonical32(bytes value) returns (bool) {
+    return value.length == 32;
+}
+
+function nonzero32(bytes value) returns (bool) {
+    return value != 0x0000000000000000000000000000000000000000000000000000000000000000;
+}
+
+function validScalar(bytes value) returns (bool) {
+    return canonical32(value) && nonzero32(value);
+}
+
+function validPoint(bytes pointY, bytes pointX) returns (bool) {
+    return canonical32(pointY) && canonical32(pointX) && (nonzero32(pointY) || nonzero32(pointX));
+}
+
+function verifySchnorrOperands(
+    bytes tagHash,
+    bytes statementPointY,
+    bytes statementPointX,
+    bytes statementContext,
+    bytes challenge,
+    bytes response,
+    bytes responseGeneratorY,
+    bytes responseGeneratorX,
+    bytes challengePointY,
+    bytes challengePointX,
+    bytes reconstructedRY,
+    bytes reconstructedRX
+) {
+    require(
+        canonical32(tagHash) &&
+        validPoint(statementPointY, statementPointX) &&
+        canonical32(statementContext) &&
+        validScalar(challenge) &&
+        validScalar(response) &&
+        validPoint(responseGeneratorY, responseGeneratorX) &&
+        validPoint(challengePointY, challengePointX) &&
+        validPoint(reconstructedRY, reconstructedRX),
+        "Schnorr operands are invalid"
+    );
+
+    require(
+        sha256(
+            tagHash +
+            tagHash +
+            statementPointX +
+            statementPointY +
+            reconstructedRX +
+            reconstructedRY +
+            statementContext
+        ) == challenge,
+        "invalid Schnorr challenge"
+    );
+}
+
+function verifyDleqOperands(
+    bytes tagHash,
+    bytes generatorY,
+    bytes generatorX,
+    bytes independentPointY,
+    bytes independentPointX,
+    bytes statementPointY,
+    bytes statementPointX,
+    bytes relatedPointY,
+    bytes relatedPointX,
+    bytes statementContext,
+    bytes challenge,
+    bytes response,
+    bytes responseGeneratorY,
+    bytes responseGeneratorX,
+    bytes challengeStatementY,
+    bytes challengeStatementX,
+    bytes transcript1Y,
+    bytes transcript1X,
+    bytes responseIndependentY,
+    bytes responseIndependentX,
+    bytes challengeRelatedY,
+    bytes challengeRelatedX,
+    bytes transcript2Y,
+    bytes transcript2X
+) {
+    require(
+        canonical32(tagHash) &&
+        validPoint(generatorY, generatorX) &&
+        validPoint(independentPointY, independentPointX) &&
+        validPoint(statementPointY, statementPointX) &&
+        validPoint(relatedPointY, relatedPointX) &&
+        canonical32(statementContext) &&
+        validScalar(challenge) &&
+        validScalar(response) &&
+        validPoint(responseGeneratorY, responseGeneratorX) &&
+        validPoint(challengeStatementY, challengeStatementX) &&
+        validPoint(transcript1Y, transcript1X) &&
+        validPoint(responseIndependentY, responseIndependentX) &&
+        validPoint(challengeRelatedY, challengeRelatedX) &&
+        validPoint(transcript2Y, transcript2X),
+        "DLEQ operands are invalid"
+    );
+
+    require(
+        sha256(
+            tagHash +
+            tagHash +
+            generatorX +
+            generatorY +
+            independentPointX +
+            independentPointY +
+            statementPointX +
+            statementPointY +
+            relatedPointX +
+            relatedPointY +
+            transcript1X +
+            transcript1Y +
+            transcript2X +
+            transcript2Y +
+            statementContext
+        ) == challenge,
+        "invalid DLEQ challenge"
+    );
+}
+
+function verifyPedersenOperands(
+    bytes tagHash,
+    bytes generatorY,
+    bytes generatorX,
+    bytes independentPointY,
+    bytes independentPointX,
+    bytes commitmentY,
+    bytes commitmentX,
+    bytes statementContext,
+    bytes challenge,
+    bytes messageResponse,
+    bytes blindingResponse,
+    bytes messageGeneratorY,
+    bytes messageGeneratorX,
+    bytes blindingIndependentY,
+    bytes blindingIndependentX,
+    bytes challengeCommitmentY,
+    bytes challengeCommitmentX,
+    bytes reconstructedTY,
+    bytes reconstructedTX
+) {
+    require(
+        canonical32(tagHash) &&
+        validPoint(generatorY, generatorX) &&
+        validPoint(independentPointY, independentPointX) &&
+        validPoint(commitmentY, commitmentX) &&
+        canonical32(statementContext) &&
+        validScalar(challenge) &&
+        validScalar(messageResponse) &&
+        validScalar(blindingResponse) &&
+        validPoint(messageGeneratorY, messageGeneratorX) &&
+        validPoint(blindingIndependentY, blindingIndependentX) &&
+        validPoint(challengeCommitmentY, challengeCommitmentX) &&
+        validPoint(reconstructedTY, reconstructedTX),
+        "Pedersen operands are invalid"
+    );
+
+    require(
+        sha256(
+            tagHash +
+            tagHash +
+            generatorX +
+            generatorY +
+            independentPointX +
+            independentPointY +
+            commitmentX +
+            commitmentY +
+            reconstructedTX +
+            reconstructedTY +
+            statementContext
+        ) == challenge,
+        "invalid Pedersen challenge"
+    );
+}
+
+contract ProofCapabilities(
+    bytes schnorrTagHash,
+    bytes dleqTagHash,
+    bytes pedersenTagHash
+) {
+    function verifySchnorr(
+        bytes statementPointY,
+        bytes statementPointX,
+        bytes statementContext,
+        bytes challenge,
+        bytes response,
+        bytes responseGeneratorY,
+        bytes responseGeneratorX,
+        bytes challengePointY,
+        bytes challengePointX,
+        bytes reconstructedRY,
+        bytes reconstructedRX
+    ) {
+        verifySchnorrOperands(
+            schnorrTagHash,
+            statementPointY,
+            statementPointX,
+            statementContext,
+            challenge,
+            response,
+            responseGeneratorY,
+            responseGeneratorX,
+            challengePointY,
+            challengePointX,
+            reconstructedRY,
+            reconstructedRX
+        );
+        require(true);
+    }
+
+    function verifyDleq(
+        bytes generatorY,
+        bytes generatorX,
+        bytes independentPointY,
+        bytes independentPointX,
+        bytes statementPointY,
+        bytes statementPointX,
+        bytes relatedPointY,
+        bytes relatedPointX,
+        bytes statementContext,
+        bytes challenge,
+        bytes response,
+        bytes responseGeneratorY,
+        bytes responseGeneratorX,
+        bytes challengeStatementY,
+        bytes challengeStatementX,
+        bytes transcript1Y,
+        bytes transcript1X,
+        bytes responseIndependentY,
+        bytes responseIndependentX,
+        bytes challengeRelatedY,
+        bytes challengeRelatedX,
+        bytes transcript2Y,
+        bytes transcript2X
+    ) {
+        verifyDleqOperands(
+            dleqTagHash,
+            generatorY,
+            generatorX,
+            independentPointY,
+            independentPointX,
+            statementPointY,
+            statementPointX,
+            relatedPointY,
+            relatedPointX,
+            statementContext,
+            challenge,
+            response,
+            responseGeneratorY,
+            responseGeneratorX,
+            challengeStatementY,
+            challengeStatementX,
+            transcript1Y,
+            transcript1X,
+            responseIndependentY,
+            responseIndependentX,
+            challengeRelatedY,
+            challengeRelatedX,
+            transcript2Y,
+            transcript2X
+        );
+        require(true);
+    }
+
+    function verifyPedersen(
+        bytes generatorY,
+        bytes generatorX,
+        bytes independentPointY,
+        bytes independentPointX,
+        bytes commitmentY,
+        bytes commitmentX,
+        bytes statementContext,
+        bytes challenge,
+        bytes messageResponse,
+        bytes blindingResponse,
+        bytes messageGeneratorY,
+        bytes messageGeneratorX,
+        bytes blindingIndependentY,
+        bytes blindingIndependentX,
+        bytes challengeCommitmentY,
+        bytes challengeCommitmentX,
+        bytes reconstructedTY,
+        bytes reconstructedTX
+    ) {
+        verifyPedersenOperands(
+            pedersenTagHash,
+            generatorY,
+            generatorX,
+            independentPointY,
+            independentPointX,
+            commitmentY,
+            commitmentX,
+            statementContext,
+            challenge,
+            messageResponse,
+            blindingResponse,
+            messageGeneratorY,
+            messageGeneratorX,
+            blindingIndependentY,
+            blindingIndependentX,
+            challengeCommitmentY,
+            challengeCommitmentX,
+            reconstructedTY,
+            reconstructedTX
+        );
+        require(true);
+    }
+}

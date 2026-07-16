@@ -6,9 +6,18 @@
   "scripts": {
     "validate:fixtures": "node scripts/validate-fixtures.js",
     "validate:vm-fixtures": "node scripts/validate-vm-fixtures.js",
-    "validate": "npm run validate:fixtures && npm run validate:vm-fixtures"
+    "test:cashscript": "node --test benchmarks/cashscript/tests/functions.test.js benchmarks/cashscript/tests/proofs.test.js benchmarks/cashscript/tests/emulation.test.js benchmarks/cashscript/tests/linked-state.test.js",
+    "test:cashscript:linked": "node --test benchmarks/cashscript/tests/linked-proof.test.js",
+    "test:cashscript:chipnet": "node benchmarks/cashscript/integration/emulation-chipnet-test.js",
+    "validate:cashscript": "npm run test:cashscript && npm run test:cashscript:linked",
+    "validate": "npm run validate:fixtures && npm run validate:vm-fixtures && npm run validate:cashscript",
+    "test": "npm run validate"
   },
   "devDependencies": {
-    "@bitauth/libauth": "^3.0.0"
+    "@bitauth/libauth": "^3.0.0",
+    "@electrum-cash/network": "^4.1.3",
+    "cashc": "^0.14.0-next.1",
+    "cashscript": "^0.14.0-next.1",
+    "dotenv": "^17.4.2"
   }
 }

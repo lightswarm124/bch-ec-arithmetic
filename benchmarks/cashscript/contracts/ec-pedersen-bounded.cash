@@ -1,0 +1,39 @@
+pragma cashscript 0.14.0;
+
+import "./ec-emulation.cash";
+
+// Public-opening comparison for a bounded Pedersen commitment. This proves
+// C = value*G + blinding*H with the same bounded Jacobian arithmetic used by
+// the DLEQ harness. It reveals the opening and is not a zero-knowledge range
+// proof; its purpose is to measure the arithmetic relation that a native
+// Pedersen/range-proof verifier would need to evaluate.
+contract EmulatedPedersenBounded(
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int commitmentX,
+    int commitmentY,
+    int maximumValue
+) {
+    function openBounded(int value, int blinding) {
+        require(value >= 0 && value <= maximumValue && value < 4);
+        require(blinding >= 0 && blinding < 4);
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes commitment = packPoint(commitmentX, commitmentY);
+
+        require(
+            jacobianEqualsAffine(
+                boundedDoubleScalarMultiply(
+                    generator,
+                    value,
+                    independentPoint,
+                    blinding
+                ),
+                commitment
+            )
+        );
+    }
+}

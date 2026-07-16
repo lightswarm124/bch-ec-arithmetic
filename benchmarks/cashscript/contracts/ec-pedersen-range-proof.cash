@@ -1,0 +1,223 @@
+pragma cashscript 0.14.0;
+
+import "./ec-emulation.cash";
+
+// Complete Fiat-Shamir OR proof for a small Pedersen range [0, 3]. The
+// prover shows knowledge of an opening for one of the four public values
+// without revealing which value was used. This is a real zero-knowledge range
+// proof construction, not a revealed-opening or bounded-scalar shortcut.
+//
+// It is intentionally a cryptographic reference for comparison: the four
+// full-width EC equations cannot fit the current BCH VM density limit without
+// native EC/scalar operations.
+function canonicalNonnegativeScalar(int value) returns (bool) {
+    return canonicalScalar(value);
+}
+
+function hashPedersenRangeTranscript(
+    bytes tagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int commitmentX,
+    int commitmentY,
+    int transcript0X,
+    int transcript0Y,
+    int transcript1X,
+    int transcript1Y,
+    int transcript2X,
+    int transcript2Y,
+    int transcript3X,
+    int transcript3Y,
+    bytes statementContext
+) returns (bytes) {
+    return sha256(
+        tagHash +
+        tagHash +
+        toBigEndian32(generatorX) +
+        toBigEndian32(generatorY) +
+        toBigEndian32(independentPointX) +
+        toBigEndian32(independentPointY) +
+        toBigEndian32(commitmentX) +
+        toBigEndian32(commitmentY) +
+        toBigEndian32(transcript0X) +
+        toBigEndian32(transcript0Y) +
+        toBigEndian32(transcript1X) +
+        toBigEndian32(transcript1Y) +
+        toBigEndian32(transcript2X) +
+        toBigEndian32(transcript2Y) +
+        toBigEndian32(transcript3X) +
+        toBigEndian32(transcript3Y) +
+        statementContext
+    );
+}
+
+contract PedersenRangeProof(
+    bytes rangeProofTagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int commitmentX,
+    int commitmentY,
+    bytes statementContext,
+    int maximumValue
+) {
+    function verifyRangeProof(
+        bytes challengeBytes,
+        int challenge,
+        int challenge0,
+        int response0,
+        int transcript0X,
+        int transcript0Y,
+        int challenge1,
+        int response1,
+        int transcript1X,
+        int transcript1Y,
+        int challenge2,
+        int response2,
+        int transcript2X,
+        int transcript2Y,
+        int challenge3,
+        int response3,
+        int transcript3X,
+        int transcript3Y
+    ) {
+        require(
+            maximumValue == 3 &&
+            canonicalField(generatorX) && canonicalField(generatorY) &&
+            canonicalField(independentPointX) && canonicalField(independentPointY) &&
+            canonicalField(commitmentX) && canonicalField(commitmentY) &&
+            canonicalField(transcript0X) && canonicalField(transcript0Y) &&
+            canonicalField(transcript1X) && canonicalField(transcript1Y) &&
+            canonicalField(transcript2X) && canonicalField(transcript2Y) &&
+            canonicalField(transcript3X) && canonicalField(transcript3Y) &&
+            canonicalNonnegativeScalar(challenge) &&
+            canonicalNonnegativeScalar(challenge0) &&
+            canonicalNonnegativeScalar(response0) &&
+            canonicalNonnegativeScalar(challenge1) &&
+            canonicalNonnegativeScalar(response1) &&
+            canonicalNonnegativeScalar(challenge2) &&
+            canonicalNonnegativeScalar(response2) &&
+            canonicalNonnegativeScalar(challenge3) &&
+            canonicalNonnegativeScalar(response3)
+        );
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes commitment = packPoint(commitmentX, commitmentY);
+        bytes transcript0 = packPoint(transcript0X, transcript0Y);
+        bytes transcript1 = packPoint(transcript1X, transcript1Y);
+        bytes transcript2 = packPoint(transcript2X, transcript2Y);
+        bytes transcript3 = packPoint(transcript3X, transcript3Y);
+
+        require(
+            validPublicPoint(generator) &&
+            validPublicPoint(independentPoint) &&
+            validPublicPoint(commitment)
+        );
+        require(challengeBytes == toBigEndian32(challenge));
+        require(
+            hashPedersenRangeTranscript(
+                rangeProofTagHash,
+                generatorX,
+                generatorY,
+                independentPointX,
+                independentPointY,
+                commitmentX,
+                commitmentY,
+                transcript0X,
+                transcript0Y,
+                transcript1X,
+                transcript1Y,
+                transcript2X,
+                transcript2Y,
+                transcript3X,
+                transcript3Y,
+                statementContext
+            ) == challengeBytes
+        );
+        require(
+            scalarMod(challenge0 + challenge1 + challenge2 + challenge3) ==
+            challenge
+        );
+
+        // D_i = C - iG for i = 0, 1, 2, 3. The prover supplies an OR proof
+        // for knowledge of r such that D_i = rH for one branch.
+        bytes difference0 = commitment;
+        bytes difference1 = pointAdd(commitment, pointNegate(generator));
+        bytes difference2 = pointAdd(difference1, pointNegate(generator));
+        bytes difference3 = pointAdd(difference2, pointNegate(generator));
+
+        bytes negativeDifference0 = pointNegate(difference0);
+        bytes negativeDifference1 = pointNegate(difference1);
+        bytes negativeDifference2 = pointNegate(difference2);
+        bytes negativeDifference3 = pointNegate(difference3);
+        bytes combined0 = jacobianMixedAdd(
+            affineToJacobian(independentPoint),
+            negativeDifference0
+        );
+        bytes combined1 = jacobianMixedAdd(
+            affineToJacobian(independentPoint),
+            negativeDifference1
+        );
+        bytes combined2 = jacobianMixedAdd(
+            affineToJacobian(independentPoint),
+            negativeDifference2
+        );
+        bytes combined3 = jacobianMixedAdd(
+            affineToJacobian(independentPoint),
+            negativeDifference3
+        );
+
+        require(
+            jacobianEqualsAffine(
+                doubleScalarMultiply(
+                    independentPoint,
+                    response0,
+                    negativeDifference0,
+                    challenge0,
+                    combined0
+                ),
+                transcript0
+            )
+        );
+        require(
+            jacobianEqualsAffine(
+                doubleScalarMultiply(
+                    independentPoint,
+                    response1,
+                    negativeDifference1,
+                    challenge1,
+                    combined1
+                ),
+                transcript1
+            )
+        );
+        require(
+            jacobianEqualsAffine(
+                doubleScalarMultiply(
+                    independentPoint,
+                    response2,
+                    negativeDifference2,
+                    challenge2,
+                    combined2
+                ),
+                transcript2
+            )
+        );
+        require(
+            jacobianEqualsAffine(
+                doubleScalarMultiply(
+                    independentPoint,
+                    response3,
+                    negativeDifference3,
+                    challenge3,
+                    combined3
+                ),
+                transcript3
+            )
+        );
+    }
+}

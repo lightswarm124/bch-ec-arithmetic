@@ -1,0 +1,241 @@
+pragma cashscript 0.14.0;
+
+// Generic operand-plumbing helpers for the proposed native EC opcodes.
+// These checks intentionally do not perform secp256k1 arithmetic because the
+// installed CashScript VM target does not yet expose the native operations.
+
+function requirePositive(int value) {
+    require(value > 0, "value must be positive");
+}
+
+function withinLimit(int value, int limit) returns (bool) {
+    return value <= limit;
+}
+
+function scaled(int value, int factor) returns (int) {
+    return value * factor;
+}
+
+function score(int value, int limit) returns (int) {
+    return scaled(value, 2) + limit;
+}
+
+function canonical32(bytes value) returns (bool) {
+    return value.length == 32;
+}
+
+function nonzero32(bytes value) returns (bool) {
+    return value != 0x0000000000000000000000000000000000000000000000000000000000000000;
+}
+
+function validPointOperands(bytes pointY, bytes pointX) returns (bool) {
+    return canonical32(pointY) && canonical32(pointX) && (nonzero32(pointY) || nonzero32(pointX));
+}
+
+function validEcmulOperands(
+    bytes scalar,
+    bytes pointY,
+    bytes pointX,
+    bytes resultY,
+    bytes resultX
+) returns (bool) {
+    return canonical32(scalar) && nonzero32(scalar) && validPointOperands(pointY, pointX) && validPointOperands(resultY, resultX);
+}
+
+function validEcaddOperands(
+    bytes pointBy,
+    bytes pointBx,
+    bytes pointAy,
+    bytes pointAx,
+    bytes resultY,
+    bytes resultX
+) returns (bool) {
+    return (
+        validPointOperands(pointBy, pointBx) &&
+        validPointOperands(pointAy, pointAx) &&
+        validPointOperands(resultY, resultX)
+    );
+}
+
+function validModinvOperands(bytes value, bytes inverse) returns (bool) {
+    return canonical32(value) && canonical32(inverse) && nonzero32(value) && nonzero32(inverse);
+}
+
+function validEcmultgenOperands(bytes scalar, bytes resultY, bytes resultX) returns (bool) {
+    return canonical32(scalar) && nonzero32(scalar) && validPointOperands(resultY, resultX);
+}
+
+function validEcmultmultiOperands(
+    int count,
+    bytes scalarN,
+    bytes pointNY,
+    bytes pointNX,
+    bytes scalar1,
+    bytes point1Y,
+    bytes point1X,
+    bytes resultY,
+    bytes resultX
+) returns (bool) {
+    return (
+        count == 2 &&
+        canonical32(scalarN) && nonzero32(scalarN) &&
+        validPointOperands(pointNY, pointNX) &&
+        canonical32(scalar1) && nonzero32(scalar1) &&
+        validPointOperands(point1Y, point1X) &&
+        validPointOperands(resultY, resultX)
+    );
+}
+
+function validateEcmulOperands(
+    bytes scalar,
+    bytes pointY,
+    bytes pointX,
+    bytes resultY,
+    bytes resultX
+) {
+    require(validEcmulOperands(scalar, pointY, pointX, resultY, resultX), "ECMUL operands are invalid");
+}
+
+function validateEcaddOperands(
+    bytes pointBy,
+    bytes pointBx,
+    bytes pointAy,
+    bytes pointAx,
+    bytes resultY,
+    bytes resultX
+) {
+    require(validEcaddOperands(pointBy, pointBx, pointAy, pointAx, resultY, resultX), "ECADD operands are invalid");
+}
+
+function validateModinvOperands(bytes value, bytes inverse) {
+    require(validModinvOperands(value, inverse), "MODINV operands are invalid");
+}
+
+function validateEcmultgenOperands(bytes scalar, bytes resultY, bytes resultX) {
+    require(validEcmultgenOperands(scalar, resultY, resultX), "ECMULTGEN operands are invalid");
+}
+
+function validateEcmultmultiOperands(
+    int count,
+    bytes scalarN,
+    bytes pointNY,
+    bytes pointNX,
+    bytes scalar1,
+    bytes point1Y,
+    bytes point1X,
+    bytes resultY,
+    bytes resultX
+) {
+    require(
+        validEcmultmultiOperands(
+            count,
+            scalarN,
+            pointNY,
+            pointNX,
+            scalar1,
+            point1Y,
+            point1X,
+            resultY,
+            resultX
+        ),
+        "ECMULTMULTI operands are invalid"
+    );
+}
+
+contract FunctionCapabilities(int limit) {
+    function spend(int value) {
+        requirePositive(value);
+        require(withinLimit(value, limit), "value exceeds limit");
+        require(score(value, limit) == (value * 2 + limit), "wrong score");
+    }
+
+    function simulateEcmul(
+        bytes scalar,
+        bytes pointY,
+        bytes pointX,
+        bytes resultY,
+        bytes resultX
+    ) {
+        validateEcmulOperands(scalar, pointY, pointX, resultY, resultX);
+        require(true);
+    }
+
+    function simulateEcadd(
+        bytes pointBy,
+        bytes pointBx,
+        bytes pointAy,
+        bytes pointAx,
+        bytes resultY,
+        bytes resultX
+    ) {
+        validateEcaddOperands(pointBy, pointBx, pointAy, pointAx, resultY, resultX);
+        require(true);
+    }
+
+    function simulateModinv(bytes value, bytes inverse) {
+        validateModinvOperands(value, inverse);
+        require(true);
+    }
+
+    function simulateEcmultgen(bytes scalar, bytes resultY, bytes resultX) {
+        validateEcmultgenOperands(scalar, resultY, resultX);
+        require(true);
+    }
+
+    function simulateEcmultmulti(
+        int count,
+        bytes scalarN,
+        bytes pointNY,
+        bytes pointNX,
+        bytes scalar1,
+        bytes point1Y,
+        bytes point1X,
+        bytes resultY,
+        bytes resultX
+    ) {
+        validateEcmultmultiOperands(
+            count,
+            scalarN,
+            pointNY,
+            pointNX,
+            scalar1,
+            point1Y,
+            point1X,
+            resultY,
+            resultX
+        );
+        require(true);
+    }
+
+    function simulateAddendum(
+        bytes modinvValue,
+        bytes modinvInverse,
+        bytes ecmultgenScalar,
+        bytes ecmultgenResultY,
+        bytes ecmultgenResultX,
+        int ecmultmultiCount,
+        bytes ecmultmultiScalarN,
+        bytes ecmultmultiPointNY,
+        bytes ecmultmultiPointNX,
+        bytes ecmultmultiScalar1,
+        bytes ecmultmultiPoint1Y,
+        bytes ecmultmultiPoint1X,
+        bytes ecmultmultiResultY,
+        bytes ecmultmultiResultX
+    ) {
+        validateModinvOperands(modinvValue, modinvInverse);
+        validateEcmultgenOperands(ecmultgenScalar, ecmultgenResultY, ecmultgenResultX);
+        validateEcmultmultiOperands(
+            ecmultmultiCount,
+            ecmultmultiScalarN,
+            ecmultmultiPointNY,
+            ecmultmultiPointNX,
+            ecmultmultiScalar1,
+            ecmultmultiPoint1Y,
+            ecmultmultiPoint1X,
+            ecmultmultiResultY,
+            ecmultmultiResultX
+        );
+        require(true);
+    }
+}

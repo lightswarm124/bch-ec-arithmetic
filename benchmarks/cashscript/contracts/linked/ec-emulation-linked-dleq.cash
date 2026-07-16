@@ -1,0 +1,185 @@
+pragma cashscript 0.14.0;
+
+import "../ec-emulation.cash";
+
+// The stage digest binds the response, challenge, and first transcript point
+// across the two input-specific functions. The second stage additionally
+// recomputes the complete Fiat-Shamir transcript hash.
+function linkedDleqStateMatches(bytes expected, bytes unlocking) returns (bool) {
+    bytes prefix, bytes suffix = unlocking.split(34);
+    bytes pushOpcode, bytes pushedState = prefix.split(1);
+    return pushOpcode == 0x21 && pushedState == expected && suffix.length > 0;
+}
+
+function linkedDleqStageState(
+    int challenge,
+    int response,
+    int transcriptX,
+    int transcriptY
+) returns (bytes) {
+    return sha256(
+        toBigEndian32(challenge) +
+        toBigEndian32(response) +
+        toBigEndian32(transcriptX) +
+        toBigEndian32(transcriptY)
+    );
+}
+
+function verifyLinkedDleqEquation(
+    bytes firstPoint,
+    int firstScalar,
+    bytes secondPoint,
+    int secondScalar,
+    bytes transcript
+) returns (bool) {
+    bytes negativeSecondPoint = pointNegate(secondPoint);
+    bytes combined = jacobianMixedAdd(
+        affineToJacobian(firstPoint),
+        negativeSecondPoint
+    );
+    return jacobianEqualsAffine(
+        doubleScalarMultiply(
+            firstPoint,
+            firstScalar,
+            negativeSecondPoint,
+            secondScalar,
+            combined
+        ),
+        transcript
+    );
+}
+
+contract LinkedDleq(
+    bytes dleqTagHash,
+    int generatorX,
+    int generatorY,
+    int independentPointX,
+    int independentPointY,
+    int statementPointX,
+    int statementPointY,
+    int relatedPointX,
+    int relatedPointY,
+    bytes statementContext
+) {
+    function verifyFirst(
+        int challenge,
+        int response,
+        int transcript1X,
+        int transcript1Y,
+        bytes stageState
+    ) {
+        require(tx.inputs.length == 2);
+        require(
+            tx.inputs[0].lockingBytecode == tx.inputs[1].lockingBytecode
+        );
+        require(
+            linkedDleqStateMatches(
+                stageState,
+                tx.inputs[1].unlockingBytecode
+            )
+        );
+
+        require(
+            canonicalField(generatorX) && canonicalField(generatorY) &&
+            canonicalField(statementPointX) && canonicalField(statementPointY) &&
+            canonicalField(transcript1X) && canonicalField(transcript1Y) &&
+            canonicalScalar(challenge) && canonicalScalar(response)
+        );
+        require(
+            stageState == linkedDleqStageState(
+                challenge,
+                response,
+                transcript1X,
+                transcript1Y
+            ) + 0x00
+        );
+
+        bytes generator = packPoint(generatorX, generatorY);
+        bytes statementPoint = packPoint(statementPointX, statementPointY);
+        require(
+            validPublicPoint(generator) &&
+            validPublicPoint(statementPoint)
+        );
+        require(
+            verifyLinkedDleqEquation(
+                generator,
+                response,
+                statementPoint,
+                challenge,
+                packPoint(transcript1X, transcript1Y)
+            )
+        );
+    }
+
+    function verifySecond(
+        int challenge,
+        int response,
+        int transcript1X,
+        int transcript1Y,
+        int transcript2X,
+        int transcript2Y,
+        bytes32 challengeBytes,
+        bytes stageState
+    ) {
+        require(tx.inputs.length == 2);
+        require(
+            tx.inputs[0].lockingBytecode == tx.inputs[1].lockingBytecode
+        );
+        require(
+            linkedDleqStateMatches(
+                stageState,
+                tx.inputs[0].unlockingBytecode
+            )
+        );
+        require(
+            canonicalField(independentPointX) && canonicalField(independentPointY) &&
+            canonicalField(relatedPointX) && canonicalField(relatedPointY) &&
+            canonicalField(transcript1X) && canonicalField(transcript1Y) &&
+            canonicalField(transcript2X) && canonicalField(transcript2Y) &&
+            canonicalScalar(challenge) && canonicalScalar(response)
+        );
+        require(
+            stageState == linkedDleqStageState(
+                challenge,
+                response,
+                transcript1X,
+                transcript1Y
+            ) + 0x00
+        );
+        require(
+            challengeBytes == hashDleqTranscript(
+                dleqTagHash,
+                generatorX,
+                generatorY,
+                independentPointX,
+                independentPointY,
+                statementPointX,
+                statementPointY,
+                relatedPointX,
+                relatedPointY,
+                transcript1X,
+                transcript1Y,
+                transcript2X,
+                transcript2Y,
+                statementContext
+            )
+        );
+        require(challengeBytes == toBigEndian32(challenge));
+
+        bytes independentPoint = packPoint(independentPointX, independentPointY);
+        bytes relatedPoint = packPoint(relatedPointX, relatedPointY);
+        require(
+            validPublicPoint(independentPoint) &&
+            validPublicPoint(relatedPoint)
+        );
+        require(
+            verifyLinkedDleqEquation(
+                independentPoint,
+                response,
+                relatedPoint,
+                challenge,
+                packPoint(transcript2X, transcript2Y)
+            )
+        );
+    }
+}

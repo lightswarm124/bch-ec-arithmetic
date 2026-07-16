@@ -1,0 +1,418 @@
+pragma cashscript 0.14.0;
+
+import "../ec-bulletproof-range-proof.cash";
+
+// Three-input decomposition of the complete 2-bit Bulletproof verifier:
+// input 0 checks transcript challenges and the t(x) equation, input 1 checks
+// the IPA transcript, and input 2 checks the final inner-product equation.
+// A transcript commitment binds all three executions to the same proof.
+function linkedBulletproofStateMatches(bytes32 expected, bytes unlocking) returns (bool) {
+    bytes prefix, bytes remainder = unlocking.split(33);
+    bytes pushOpcode, bytes pushedState = prefix.split(1);
+    return pushOpcode == 0x20 && pushedState == expected && remainder.length > 0;
+}
+
+function linkedBulletproofState(
+    bytes domain,
+    bytes context,
+    int challengeY,
+    int challengeZ,
+    int challengeX,
+    int ipaChallenge,
+    int tHat,
+    int tauX,
+    int mu,
+    int finalA,
+    int finalB,
+    int pointAX,
+    int pointAY,
+    int pointSX,
+    int pointSY,
+    int pointT1X,
+    int pointT1Y,
+    int pointT2X,
+    int pointT2Y,
+    int pointLX,
+    int pointLY,
+    int pointRX,
+    int pointRY
+) returns (bytes) {
+    return sha256(
+        domain +
+        context +
+        toBigEndian32(challengeY) +
+        toBigEndian32(challengeZ) +
+        toBigEndian32(challengeX) +
+        toBigEndian32(ipaChallenge) +
+        toBigEndian32(tHat) +
+        toBigEndian32(tauX) +
+        toBigEndian32(mu) +
+        toBigEndian32(finalA) +
+        toBigEndian32(finalB) +
+        pointBytes(pointAX, pointAY) +
+        pointBytes(pointSX, pointSY) +
+        pointBytes(pointT1X, pointT1Y) +
+        pointBytes(pointT2X, pointT2Y) +
+        pointBytes(pointLX, pointLY) +
+        pointBytes(pointRX, pointRY)
+    );
+}
+
+function linkedBulletproofPBase(
+    bytes blindingGenerator,
+    bytes vectorG0,
+    bytes vectorG1,
+    bytes vectorH0,
+    bytes vectorH1,
+    bytes pointA,
+    bytes pointS,
+    int challengeX,
+    int challengeY,
+    int challengeZ,
+    int mu
+) returns (bytes) {
+    int inverseY = scalarModInverse(challengeY);
+    int challengeZ2 = scalarMod(challengeZ * challengeZ);
+    bytes negativeGSum = pointNegate(pointAdd(vectorG0, vectorG1));
+    bytes pBase = pointAdd(
+        pointAdd(
+            pointAdd(
+                pointAdd(pointA, scalarMultiply(pointS, challengeX)),
+                scalarMultiply(negativeGSum, challengeZ)
+            ),
+            scalarMultiply(
+                vectorH0,
+                scalarMod(challengeZ + challengeZ2)
+            )
+        ),
+        scalarMultiply(
+            vectorH1,
+            scalarMod(
+                scalarMod(challengeZ * challengeY + challengeZ2 * 2) *
+                inverseY
+            )
+        )
+    );
+    return pointAdd(
+        pBase,
+        pointNegate(scalarMultiply(blindingGenerator, mu))
+    );
+}
+
+contract LinkedBulletproofRangeProof(
+    bytes domain,
+    bytes context,
+    int valueGeneratorX,
+    int valueGeneratorY,
+    int blindingGeneratorX,
+    int blindingGeneratorY,
+    int innerProductGeneratorX,
+    int innerProductGeneratorY,
+    int vectorG0X,
+    int vectorG0Y,
+    int vectorG1X,
+    int vectorG1Y,
+    int vectorH0X,
+    int vectorH0Y,
+    int vectorH1X,
+    int vectorH1Y,
+    int commitmentX,
+    int commitmentY
+) {
+    function verifyLinked(
+        int challengeY,
+        int challengeZ,
+        int challengeX,
+        int ipaChallenge,
+        int tHat,
+        int tauX,
+        int mu,
+        int finalA,
+        int finalB,
+        int pointAX,
+        int pointAY,
+        int pointSX,
+        int pointSY,
+        int pointT1X,
+        int pointT1Y,
+        int pointT2X,
+        int pointT2Y,
+        int pointLX,
+        int pointLY,
+        int pointRX,
+        int pointRY,
+        bytes32 stateCommitment
+    ) {
+        int inputIndex = this.activeInputIndex;
+
+        require(tx.inputs.length == 3);
+        require(
+            tx.inputs[0].lockingBytecode == tx.inputs[1].lockingBytecode &&
+            tx.inputs[1].lockingBytecode == tx.inputs[2].lockingBytecode
+        );
+        require(
+            stateCommitment == linkedBulletproofState(
+                domain,
+                context,
+                challengeY,
+                challengeZ,
+                challengeX,
+                ipaChallenge,
+                tHat,
+                tauX,
+                mu,
+                finalA,
+                finalB,
+                pointAX,
+                pointAY,
+                pointSX,
+                pointSY,
+                pointT1X,
+                pointT1Y,
+                pointT2X,
+                pointT2Y,
+                pointLX,
+                pointLY,
+                pointRX,
+                pointRY
+            )
+        );
+
+        if (inputIndex == 0) {
+            require(
+                linkedBulletproofStateMatches(
+                    stateCommitment,
+                    tx.inputs[1].unlockingBytecode
+                )
+            );
+        } else if (inputIndex == 1) {
+            require(
+                linkedBulletproofStateMatches(
+                    stateCommitment,
+                    tx.inputs[0].unlockingBytecode
+                ) &&
+                linkedBulletproofStateMatches(
+                    stateCommitment,
+                    tx.inputs[2].unlockingBytecode
+                )
+            );
+        } else {
+            require(
+                linkedBulletproofStateMatches(
+                    stateCommitment,
+                    tx.inputs[1].unlockingBytecode
+                )
+            );
+        }
+
+        require(
+            challengeY != 0 && challengeZ != 0 && challengeX != 0 &&
+            ipaChallenge != 0 &&
+            canonicalScalar(challengeY) && canonicalScalar(challengeZ) &&
+            canonicalScalar(challengeX) && canonicalScalar(ipaChallenge) &&
+            canonicalScalar(tHat) && canonicalScalar(tauX) &&
+            canonicalScalar(mu) && canonicalScalar(finalA) &&
+            canonicalScalar(finalB)
+        );
+
+        bytes valueGenerator = packPoint(valueGeneratorX, valueGeneratorY);
+        bytes blindingGenerator = packPoint(blindingGeneratorX, blindingGeneratorY);
+        bytes innerProductGenerator = packPoint(innerProductGeneratorX, innerProductGeneratorY);
+        bytes vectorG0 = packPoint(vectorG0X, vectorG0Y);
+        bytes vectorG1 = packPoint(vectorG1X, vectorG1Y);
+        bytes vectorH0 = packPoint(vectorH0X, vectorH0Y);
+        bytes vectorH1 = packPoint(vectorH1X, vectorH1Y);
+        bytes commitment = packPoint(commitmentX, commitmentY);
+        bytes pointA = packPoint(pointAX, pointAY);
+        bytes pointS = packPoint(pointSX, pointSY);
+        bytes pointT1 = packPoint(pointT1X, pointT1Y);
+        bytes pointT2 = packPoint(pointT2X, pointT2Y);
+        bytes pointL = packPoint(pointLX, pointLY);
+        bytes pointR = packPoint(pointRX, pointRY);
+
+        if (inputIndex == 0) {
+            require(
+                canonicalField(valueGeneratorX) && canonicalField(valueGeneratorY) &&
+                canonicalField(blindingGeneratorX) && canonicalField(blindingGeneratorY) &&
+                canonicalField(innerProductGeneratorX) && canonicalField(innerProductGeneratorY) &&
+                canonicalField(vectorG0X) && canonicalField(vectorG0Y) &&
+                canonicalField(vectorG1X) && canonicalField(vectorG1Y) &&
+                canonicalField(vectorH0X) && canonicalField(vectorH0Y) &&
+                canonicalField(vectorH1X) && canonicalField(vectorH1Y) &&
+                canonicalField(commitmentX) && canonicalField(commitmentY) &&
+                canonicalField(pointAX) && canonicalField(pointAY) &&
+                canonicalField(pointSX) && canonicalField(pointSY) &&
+                canonicalField(pointT1X) && canonicalField(pointT1Y) &&
+                canonicalField(pointT2X) && canonicalField(pointT2Y) &&
+                canonicalField(pointLX) && canonicalField(pointLY) &&
+                canonicalField(pointRX) && canonicalField(pointRY)
+            );
+            require(
+                validPublicPoint(valueGenerator) &&
+                validPublicPoint(blindingGenerator) &&
+                validPublicPoint(innerProductGenerator) &&
+                validPublicPoint(vectorG0) && validPublicPoint(vectorG1) &&
+                validPublicPoint(vectorH0) && validPublicPoint(vectorH1) &&
+                validPublicPoint(commitment) && validPublicPoint(pointA) &&
+                validPublicPoint(pointS) && validPublicPoint(pointT1) &&
+                validPublicPoint(pointT2) && validPublicPoint(pointL) &&
+                validPublicPoint(pointR)
+            );
+            require(
+                hashBulletproofY(
+                    domain,
+                    context,
+                    commitmentX,
+                    commitmentY,
+                    pointAX,
+                    pointAY,
+                    pointSX,
+                    pointSY
+                ) == toBigEndian32(challengeY)
+            );
+            require(
+                hashBulletproofZ(
+                    domain,
+                    context,
+                    challengeY,
+                    commitmentX,
+                    commitmentY,
+                    pointAX,
+                    pointAY,
+                    pointSX,
+                    pointSY
+                ) == toBigEndian32(challengeZ)
+            );
+            require(
+                hashBulletproofX(
+                    domain,
+                    context,
+                    challengeY,
+                    challengeZ,
+                    commitmentX,
+                    commitmentY,
+                    pointAX,
+                    pointAY,
+                    pointSX,
+                    pointSY,
+                    pointT1X,
+                    pointT1Y,
+                    pointT2X,
+                    pointT2Y
+                ) == toBigEndian32(challengeX)
+            );
+
+            int challengeZ2 = scalarMod(challengeZ * challengeZ);
+            int challengeX2 = scalarMod(challengeX * challengeX);
+            int delta = scalarMod(
+                scalarMod(challengeZ - challengeZ2) * scalarMod(1 + challengeY) -
+                scalarMod(challengeZ2 * challengeZ) * 3
+            );
+            require(
+                pointAdd(
+                    scalarMultiply(valueGenerator, tHat),
+                    scalarMultiply(blindingGenerator, tauX)
+                ) == pointAdd(
+                    pointAdd(
+                        scalarMultiply(commitment, challengeZ2),
+                        scalarMultiply(valueGenerator, delta)
+                    ),
+                    pointAdd(
+                        scalarMultiply(pointT1, challengeX),
+                        scalarMultiply(pointT2, challengeX2)
+                    )
+                )
+            );
+        } else if (inputIndex == 1) {
+            bytes pBase = linkedBulletproofPBase(
+                blindingGenerator,
+                vectorG0,
+                vectorG1,
+                vectorH0,
+                vectorH1,
+                pointA,
+                pointS,
+                challengeX,
+                challengeY,
+                challengeZ,
+                mu
+            );
+            require(
+                hashBulletproofU(
+                    domain,
+                    context,
+                    commitmentX,
+                    commitmentY,
+                    pointAX,
+                    pointAY,
+                    pointSX,
+                    pointSY,
+                    pointT1X,
+                    pointT1Y,
+                    pointT2X,
+                    pointT2Y,
+                    tHat,
+                    tauX,
+                    mu,
+                    unpackX(pBase),
+                    unpackY(pBase),
+                    pointLX,
+                    pointLY,
+                    pointRX,
+                    pointRY
+                ) == toBigEndian32(ipaChallenge)
+            );
+        } else {
+            bytes pBase = linkedBulletproofPBase(
+                blindingGenerator,
+                vectorG0,
+                vectorG1,
+                vectorH0,
+                vectorH1,
+                pointA,
+                pointS,
+                challengeX,
+                challengeY,
+                challengeZ,
+                mu
+            );
+            bytes pCandidate = pointAdd(
+                pBase,
+                scalarMultiply(innerProductGenerator, tHat)
+            );
+            int inverseU = scalarModInverse(ipaChallenge);
+            int inverseU2 = scalarMod(inverseU * inverseU);
+            int challengeU2 = scalarMod(ipaChallenge * ipaChallenge);
+            int inverseY = scalarModInverse(challengeY);
+            bytes finalG = pointAdd(
+                scalarMultiply(vectorG0, inverseU),
+                scalarMultiply(vectorG1, ipaChallenge)
+            );
+            bytes finalH = pointAdd(
+                scalarMultiply(vectorH0, ipaChallenge),
+                scalarMultiply(
+                    vectorH1,
+                    scalarMod(inverseY * inverseU)
+                )
+            );
+            require(
+                pointAdd(
+                    pointAdd(
+                        pCandidate,
+                        scalarMultiply(pointL, challengeU2)
+                    ),
+                    scalarMultiply(pointR, inverseU2)
+                ) == pointAdd(
+                    pointAdd(
+                        scalarMultiply(finalG, finalA),
+                        scalarMultiply(finalH, finalB)
+                    ),
+                    scalarMultiply(
+                        innerProductGenerator,
+                        scalarMod(finalA * finalB)
+                    )
+                )
+            );
+        }
+    }
+}
